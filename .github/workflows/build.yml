@@ -18,17 +18,19 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install CMake via sdkmanager
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "cmake;3.22.1"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.0'
           channel: 'stable'
-
-      - name: Install CMake
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake=3.22.1* || sudo apt-get install -y cmake
-          cmake --version
 
       - name: Install dependencies
         run: flutter pub get
