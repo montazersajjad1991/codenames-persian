@@ -11,9 +11,6 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
-        maven { url = uri("https://maven.aliyun.com/repository/central") }
-        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
         google()
         mavenCentral()
         gradlePluginPortal()
@@ -26,5 +23,4 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
 }
 
-rootProject.name = "codenames_persian"
 include(":app")
