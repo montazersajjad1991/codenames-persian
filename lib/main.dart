@@ -79,84 +79,82 @@ class MainMenu extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/images/menu_bg.png'),
+        body: Stack(
+          fit: StackFit.expand, // پر کردن کل صفحه بدون دفرمه شدن یا خالی ماندن سمت راست
+          children: [
+            // ۱. بک‌گراند فیکس شده که کش نمی‌آید
+            Image.asset(
+              'assets/images/menu_bg.png',
               fit: BoxFit.cover,
+              alignment: Alignment.center,
             ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Column(
-                children: [
-                  const Spacer(flex: 1),
-                  const Text(
-                    'اسم رمز',
-                    style: TextStyle(
-                      fontSize: 56,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black,
-                          blurRadius: 12,
-                          offset: Offset(3, 3),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'بازی حدس کلمات',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
+            // ۲. محتوای مرکزی شده برای حالت لنداسکیپ
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500), // جلوگیری از پخش شدن بیش از حد در عرض
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center, // وسط‌چین کردن عمودی
+                        children: [
+                          const Text(
+                            'اسم رمز',
+                            style: TextStyle(
+                              fontSize: 56,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(color: Colors.black, blurRadius: 12, offset: Offset(3, 3)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black45,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              'بازی حدس کلمات',
+                              style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                          _buildButton(
+                            '🌐 بازی آنلاین ۴ نفره',
+                            const Color(0xFF1E88E5),
+                            () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const OnlineLobby()),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          _buildButton(
+                            '🎲 بازی دورهمی (یک گوشی)',
+                            const Color(0xFF43A047),
+                            () => _askHandsOffline(context),
+                          ),
+                          const SizedBox(height: 14),
+                          _buildButton('📚 آموزش', const Color(0xFFFB8C00), () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const TutorialPage()),
+                            );
+                          }),
+                          const SizedBox(height: 40),
+                        ],
                       ),
                     ),
                   ),
-                  const Spacer(flex: 2),
-                  _buildButton(
-                    '🌐 بازی آنلاین ۴ نفره',
-                    const Color(0xFF1E88E5),
-                    () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const OnlineLobby()),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  _buildButton(
-                    '🎲 بازی دورهمی (یک گوشی)',
-                    const Color(0xFF43A047),
-                    () {
-                      _askHandsOffline(context);
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  _buildButton('📚 آموزش', const Color(0xFFFB8C00), () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const TutorialPage()),
-                    );
-                  }),
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -183,9 +181,7 @@ class MainMenu extends StatelessWidget {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const GameBoard(maxHands: 3),
-                  ),
+                  MaterialPageRoute(builder: (_) => const GameBoard(maxHands: 3)),
                 );
               },
               child: const Text(
@@ -198,9 +194,7 @@ class MainMenu extends StatelessWidget {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const GameBoard(maxHands: 5),
-                  ),
+                  MaterialPageRoute(builder: (_) => const GameBoard(maxHands: 5)),
                 );
               },
               child: const Text(
@@ -216,15 +210,13 @@ class MainMenu extends StatelessWidget {
 
   Widget _buildButton(String text, Color color, VoidCallback? onTap) {
     return SizedBox(
-      width: 300,
+      width: double.infinity, // پر کردن عرض چارچوب ۵۰۰ پیکسلی والد
       height: 60,
       child: ElevatedButton(
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 6,
         ),
         child: Text(
@@ -239,6 +231,9 @@ class MainMenu extends StatelessWidget {
     );
   }
 }
+}
+
+// ---------------- آموزش ----------------
 
 // ---------------- آموزش ----------------
 class TutorialPage extends StatelessWidget {
@@ -407,14 +402,12 @@ class TutorialPage extends StatelessWidget {
               _box([
                 _rule(1, [
                   const TextSpan(
-                    text:
-                        'سرنخ‌ده، رنگ کارت‌ها را می‌بیند و یک کلمه + یک عدد می‌دهد (حداکثر ۱۵ کاراکتر با احتساب فاصله، بدون عدد، انگلیسی و کلمه روی میز).',
+                    text: 'سرنخ‌ده، رنگ کارت‌ها را می‌بیند و یک کلمه + یک عدد می‌دهد (حداکثر ۱۵ کاراکتر با احتساب فاصله، بدون عدد، انگلیسی و کلمه روی میز).',
                   ),
                 ]),
                 _rule(2, [
                   const TextSpan(
-                    text:
-                        'سرنخ‌ده ۹۰ ثانیه وقت دارد؛ حدس‌زننده ۳۰ ثانیه به ازای هر عدد گفته‌شده (سرنخ ۲ = ۶۰ ثانیه). دیر بجنبی، نوبت می‌سوزه!',
+                    text: 'سرنخ‌ده ۹۰ ثانیه وقت دارد؛ حدس‌زننده ۳۰ ثانیه به ازای هر عدد گفته‌شده (سرنخ ۲ = ۶۰ ثانیه). دیر بجنبی، نوبت می‌سوزه!',
                   ),
                 ]),
                 _rule(3, [
@@ -456,8 +449,7 @@ class TutorialPage extends StatelessWidget {
                 ]),
                 _rule(5, [
                   const TextSpan(
-                    text:
-                        'حدس‌زننده فقط به تعداد عدد سرنخ می‌تواند درست حدس بزند.',
+                    text: 'حدس‌زننده فقط به تعداد عدد سرنخ می‌تواند درست حدس بزند.',
                   ),
                 ]),
               ]),
@@ -556,8 +548,9 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     );
     _socket.on('players', (list) {
       setState(() {
-        _players =
-            (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
+        _players = (list as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       });
     });
     _socket.on('setup', (data) {
@@ -1188,8 +1181,9 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed:
-                          allAssigned ? () => _askHands(() => _start()) : null,
+                      onPressed: allAssigned
+                          ? () => _askHands(() => _start())
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         padding: const EdgeInsets.symmetric(
@@ -1533,15 +1527,16 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     super.initState();
     _maxHands = widget.maxHands;
     sounds.startTheme();
-    _shakeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    )..addListener(() {
-        setState(() {
-          final t = _shakeController.value;
-          _shakeDx = sin(t * pi * 6) * 10 * (1 - t);
+    _shakeController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 400),
+        )..addListener(() {
+          setState(() {
+            final t = _shakeController.value;
+            _shakeDx = sin(t * pi * 6) * 10 * (1 - t);
+          });
         });
-      });
 
     if (widget.online) {
       _ready = false;
@@ -1789,15 +1784,17 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   void _updateTimer() {
     if (!widget.online || _winner != null || !_ready) return;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final int duration =
-        _clue == null ? 90 : 30 * (_clueNumber < 1 ? 1 : _clueNumber);
+    final int duration = _clue == null
+        ? 90
+        : 30 * (_clueNumber < 1 ? 1 : _clueNumber);
     final start = _clue == null ? _turnStart : _clueStart;
     final remaining = duration - (now - start) ~/ 1000;
     if (remaining != _remainingSec) {
       setState(() => _remainingSec = remaining);
     }
     if (remaining <= 0) {
-      final acting = (_clue == null && widget.role == 'spymaster' ||
+      final acting =
+          (_clue == null && widget.role == 'spymaster' ||
               _clue != null && widget.role == 'guesser') &&
           widget.myTeam == _currentTeam;
       if (acting) _endTurn();
@@ -1948,10 +1945,10 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     final spyColor = colorCode == 'red'
         ? Colors.red
         : colorCode == 'blue'
-            ? Colors.blue
-            : colorCode == 'assassin'
-                ? Colors.black
-                : const Color(0xFFD9C69A);
+        ? Colors.blue
+        : colorCode == 'assassin'
+        ? Colors.black
+        : const Color(0xFFD9C69A);
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFE8D8B8),
@@ -2308,38 +2305,41 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                   _turnBanner(),
                   Expanded(
                     child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 600),
-                        child: _ready
-                            ? GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: const EdgeInsets.all(8),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 5,
-                                  mainAxisSpacing: 6,
-                                  crossAxisSpacing: 6,
-                                  childAspectRatio: 1.3,
-                                ),
-                                itemCount: 25,
-                                itemBuilder: (context, index) {
-                                  return FlipCard(
-                                    revealed: _revealed[index],
-                                    onTap: () => _tapCard(index),
-                                    front: _hiddenCard(
-                                      _words[index],
-                                      _cardColors[index],
-                                    ),
-                                    back: _revealedCard(
-                                      _words[index],
-                                      _cardColors[index],
-                                      _cardArt[index],
-                                    ),
-                                  );
-                                },
-                              )
-                            : const _WaitingView(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 850),
+                          child: _ready
+                              ? GridView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.all(4),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 5,
+                                        mainAxisSpacing: 6,
+                                        crossAxisSpacing: 6,
+                                        childAspectRatio: 0.85, // ✅ ارتفاع کارت بیشتر شد تا متن کامل جا شود
+                                      ),
+                                  itemCount: 25,
+                                  itemBuilder: (context, index) {
+                                    return FlipCard(
+                                      revealed: _revealed[index],
+                                      onTap: () => _tapCard(index),
+                                      front: _hiddenCard(
+                                        _words[index],
+                                        _cardColors[index],
+                                      ),
+                                      back: _revealedCard(
+                                        _words[index],
+                                        _cardColors[index],
+                                        _cardArt[index],
+                                      ),
+                                    );
+                                  },
+                                )
+                              : const _WaitingView(),
+                        ),
                       ),
                     ),
                   ),
