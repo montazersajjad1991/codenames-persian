@@ -80,7 +80,8 @@ class MainMenu extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         body: Stack(
-          fit: StackFit.expand, // پر کردن کل صفحه بدون دفرمه شدن یا خالی ماندن سمت راست
+          fit: StackFit
+              .expand, // پر کردن کل صفحه بدون دفرمه شدن یا خالی ماندن سمت راست
           children: [
             // ۱. بک‌گراند فیکس شده که کش نمی‌آید
             Image.asset(
@@ -93,11 +94,17 @@ class MainMenu extends StatelessWidget {
               child: Center(
                 child: SingleChildScrollView(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 500), // جلوگیری از پخش شدن بیش از حد در عرض
+                    constraints: const BoxConstraints(
+                      maxWidth: 500,
+                    ), // جلوگیری از پخش شدن بیش از حد در عرض
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 20,
+                      ),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center, // وسط‌چین کردن عمودی
+                        mainAxisAlignment:
+                            MainAxisAlignment.center, // وسط‌چین کردن عمودی
                         children: [
                           const Text(
                             'اسم رمز',
@@ -106,20 +113,31 @@ class MainMenu extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                               shadows: [
-                                Shadow(color: Colors.black, blurRadius: 12, offset: Offset(3, 3)),
+                                Shadow(
+                                  color: Colors.black,
+                                  blurRadius: 12,
+                                  offset: Offset(3, 3),
+                                ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black45,
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: const Text(
                               'بازی حدس کلمات',
-                              style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 40),
@@ -129,7 +147,9 @@ class MainMenu extends StatelessWidget {
                             () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const OnlineLobby()),
+                                MaterialPageRoute(
+                                  builder: (_) => const OnlineLobby(),
+                                ),
                               );
                             },
                           ),
@@ -143,7 +163,9 @@ class MainMenu extends StatelessWidget {
                           _buildButton('📚 آموزش', const Color(0xFFFB8C00), () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const TutorialPage()),
+                              MaterialPageRoute(
+                                builder: (_) => const TutorialPage(),
+                              ),
                             );
                           }),
                           const SizedBox(height: 40),
@@ -181,7 +203,9 @@ class MainMenu extends StatelessWidget {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const GameBoard(maxHands: 3)),
+                  MaterialPageRoute(
+                    builder: (_) => const GameBoard(maxHands: 3),
+                  ),
                 );
               },
               child: const Text(
@@ -194,7 +218,9 @@ class MainMenu extends StatelessWidget {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const GameBoard(maxHands: 5)),
+                  MaterialPageRoute(
+                    builder: (_) => const GameBoard(maxHands: 5),
+                  ),
                 );
               },
               child: const Text(
@@ -216,7 +242,9 @@ class MainMenu extends StatelessWidget {
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           elevation: 6,
         ),
         child: Text(
@@ -230,7 +258,6 @@ class MainMenu extends StatelessWidget {
       ),
     );
   }
-}
 }
 
 // ---------------- آموزش ----------------
