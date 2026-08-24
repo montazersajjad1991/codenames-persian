@@ -8,7 +8,17 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 import 'words.dart';
 
-void main() {
+Future<void> _lockLandscape() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+}
+
+void main() async {
+  await _lockLandscape();
   runApp(const CodenamesApp());
 }
 
@@ -128,6 +138,14 @@ class MainMenu extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 14),
+                  _buildButton(
+                    '🎲 بازی دورهمی (یک گوشی)',
+                    const Color(0xFF43A047),
+                    () {
+                      _askHandsOffline(context);
+                    },
+                  ),
+                  const SizedBox(height: 14),
                   _buildButton('📚 آموزش', const Color(0xFFFB8C00), () {
                     Navigator.push(
                       context,
@@ -139,6 +157,58 @@ class MainMenu extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _askHandsOffline(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF252538),
+          title: const Text(
+            'چند دست بازی می‌کنید؟',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            'اول بین خودتون مشخص کنید کی قرمزه و کی آبی.\nتیمی که بیشترین دست رو ببره، برندهٔ بازیه.',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const GameBoard(maxHands: 3),
+                  ),
+                );
+              },
+              child: const Text(
+                '۳ دست',
+                style: TextStyle(color: Colors.blue, fontSize: 17),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const GameBoard(maxHands: 5),
+                  ),
+                );
+              },
+              child: const Text(
+                '۵ دست',
+                style: TextStyle(color: Colors.blue, fontSize: 17),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -462,6 +532,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
   final TextEditingController _roomNameController = TextEditingController();
   bool _isPublic = true;
   String _mode = 'main';
+  int _maxHands = 3;
   List<Map<String, dynamic>> _publicRooms = [];
 
   List<Map<String, dynamic>> _players = [];
@@ -590,6 +661,50 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     );
   }
 
+  void _askHands(VoidCallback onStart) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF252538),
+          title: const Text(
+            'چند دست بازی می‌کنید؟',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            'تیمی که بیشترین دست رو ببره، برندهٔ بازیه.',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() => _maxHands = 3);
+                onStart();
+              },
+              child: const Text(
+                '۳ دست',
+                style: TextStyle(color: Colors.blue, fontSize: 17),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() => _maxHands = 5);
+                onStart();
+              },
+              child: const Text(
+                '۵ دست',
+                style: TextStyle(color: Colors.blue, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _start() {
     final firstRed = Random().nextBool();
     final t1 = firstRed ? 'red' : 'blue';
@@ -604,7 +719,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     add('t1g', t1, 'guesser');
     add('t2s', t2, 'spymaster');
     add('t2g', t2, 'guesser');
-    _socket.emit('setup', {'assignments': assignments});
+    _socket.emit('setup', {'assignments': assignments, 'maxHands': _maxHands});
     _applySetup(assignments);
   }
 
@@ -629,6 +744,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
           isHost: _isHost,
           socket: _socket,
           roomCode: _roomCode,
+          maxHands: _maxHands,
         ),
       ),
     );
@@ -1070,7 +1186,9 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: allAssigned ? _start : null,
+                      onPressed: allAssigned
+                          ? () => _askHands(() => _start())
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         padding: const EdgeInsets.symmetric(
@@ -1356,6 +1474,7 @@ class GameBoard extends StatefulWidget {
   final bool isHost;
   final IO.Socket? socket;
   final String? roomCode;
+  final int maxHands;
 
   const GameBoard({
     super.key,
@@ -1365,6 +1484,7 @@ class GameBoard extends StatefulWidget {
     this.isHost = false,
     this.socket,
     this.roomCode,
+    this.maxHands = 3,
   });
 
   @override
@@ -1394,6 +1514,11 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   String _zoomWord = '';
   Color _zoomStrip = Colors.black;
   String? _pendingWinner;
+  int _maxHands = 3;
+  int _redWins = 0;
+  int _blueWins = 0;
+  int _hand = 1;
+  String? _matchWinner;
   int _turnStart = 0;
   int _clueStart = 0;
   int _remainingSec = 90;
@@ -1405,6 +1530,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _maxHands = widget.maxHands;
     sounds.startTheme();
     _shakeController =
         AnimationController(
@@ -1510,7 +1636,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           _pendingWinner = newWinner;
         } else {
           sounds.playWin();
-          _winner = newWinner;
+          _setWinner(newWinner);
           _shakeController.forward(from: 0);
         }
       }
@@ -1540,6 +1666,35 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       'colors': _cardColors,
       'art': _cardArt,
     });
+  }
+
+  int get _needWins => (_maxHands ~/ 2) + 1;
+
+  void _setWinner(String w) {
+    _winner = w;
+    if (w == 'red') {
+      _redWins++;
+    } else {
+      _blueWins++;
+    }
+    if (_redWins >= _needWins || _blueWins >= _needWins) {
+      _matchWinner = _redWins > _blueWins ? 'red' : 'blue';
+    }
+  }
+
+  void _nextHand() {
+    _hand++;
+    _winner = null;
+    _startNewGame();
+  }
+
+  void _resetMatch() {
+    _redWins = 0;
+    _blueWins = 0;
+    _hand = 1;
+    _matchWinner = null;
+    _winner = null;
+    _startNewGame();
   }
 
   void _startNewGame() {
@@ -1761,7 +1916,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       _shakeController.forward(from: 0);
       if (_remaining(_currentTeam) == 0) {
         sounds.playWin();
-        setState(() => _winner = _currentTeam);
+        setState(() => _setWinner(_currentTeam));
       } else {
         _guessesUsed++;
         if (_guessesUsed >= _clueNumber) {
@@ -1813,10 +1968,35 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       ),
       child: Stack(
         children: [
-          Positioned(
-            top: 6,
-            right: 6,
+          Center(
             child: Icon(Icons.person, size: 26, color: const Color(0xFFCDBA96)),
+          ),
+          Positioned(
+            left: 5,
+            right: 5,
+            top: 4,
+            child: Transform.rotate(
+              angle: 3.14159,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.75),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                alignment: Alignment.center,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    word,
+                    style: const TextStyle(
+                      color: Color(0xFF4A4A4A),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
           Positioned(
             left: 5,
@@ -1996,6 +2176,10 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        Text(
+          'دست $_hand از $_maxHands | برد قرمز $_redWins : $_blueWins آبی | ',
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
         const Text('قرمز: ', style: TextStyle(color: Colors.white)),
         _scoreChip(Colors.red, _remaining('red')),
         const SizedBox(width: 20),
@@ -2015,6 +2199,8 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   }
 
   Widget _winnerOverlay() {
+    final isFinal = _matchWinner != null;
+    final shownWinner = isFinal ? _matchWinner! : _winner!;
     return Container(
       color: Colors.black87,
       child: Center(
@@ -2022,32 +2208,45 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _assassinHit ? '💀' : '🏆',
+              isFinal ? '🏆' : (_assassinHit ? '💀' : '🎉'),
               style: const TextStyle(fontSize: 70),
             ),
             const SizedBox(height: 16),
             Text(
-              'تیم ${_teamName(_winner!)} برنده شد!',
+              isFinal
+                  ? 'تیم ${_teamName(shownWinner)} برندهٔ بازی شد!'
+                  : 'تیم ${_teamName(shownWinner)} برندهٔ دست $_hand شد!',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (_assassinHit)
+            if (_assassinHit && !isFinal)
               const Text(
                 'آدم‌کش رو شد!',
                 style: TextStyle(color: Colors.white70, fontSize: 16),
               ),
+            const SizedBox(height: 16),
+            Text(
+              'نتیجه: قرمز $_redWins — $_blueWins آبی (از $_maxHands دست)',
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+            ),
             const SizedBox(height: 30),
             if (!widget.online || widget.isHost)
               ElevatedButton(
-                onPressed: () => setState(() => _startNewGame()),
-                child: const Text('بازی دوباره'),
+                onPressed: () => setState(() {
+                  if (isFinal) {
+                    _resetMatch();
+                  } else {
+                    _nextHand();
+                  }
+                }),
+                child: Text(isFinal ? '🔄 بازی دوباره از اول' : '▶️ دست بعد'),
               )
             else
               const Text(
-                'منتظر شروع دوباره توسط میزبان...',
+                'منتظر شروع دست بعد توسط میزبان...',
                 style: TextStyle(color: Colors.white70),
               ),
           ],
@@ -2174,7 +2373,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                   setState(() {
                     _zoomImg = null;
                     if (_pendingWinner != null) {
-                      _winner = _pendingWinner;
+                      _setWinner(_pendingWinner!);
                       _pendingWinner = null;
                       _shakeController.forward(from: 0);
                     }
