@@ -407,12 +407,14 @@ class TutorialPage extends StatelessWidget {
               _box([
                 _rule(1, [
                   const TextSpan(
-                    text: 'سرنخ‌ده، رنگ کارت‌ها را می‌بیند و یک کلمه + یک عدد می‌دهد (حداکثر ۱۵ کاراکتر با احتساب فاصله، بدون عدد، انگلیسی و کلمه روی میز).',
+                    text:
+                        'سرنخ‌ده، رنگ کارت‌ها را می‌بیند و یک کلمه + یک عدد می‌دهد (حداکثر ۱۵ کاراکتر با احتساب فاصله، بدون عدد، انگلیسی و کلمه روی میز).',
                   ),
                 ]),
                 _rule(2, [
                   const TextSpan(
-                    text: 'سرنخ‌ده ۹۰ ثانیه وقت دارد؛ حدس‌زننده ۳۰ ثانیه به ازای هر عدد گفته‌شده (سرنخ ۲ = ۶۰ ثانیه). دیر بجنبی، نوبت می‌سوزه!',
+                    text:
+                        'سرنخ‌ده ۹۰ ثانیه وقت دارد؛ حدس‌زننده ۳۰ ثانیه به ازای هر عدد گفته‌شده (سرنخ ۲ = ۶۰ ثانیه). دیر بجنبی، نوبت می‌سوزه!',
                   ),
                 ]),
                 _rule(3, [
@@ -454,7 +456,8 @@ class TutorialPage extends StatelessWidget {
                 ]),
                 _rule(5, [
                   const TextSpan(
-                    text: 'حدس‌زننده فقط به تعداد عدد سرنخ می‌تواند درست حدس بزند.',
+                    text:
+                        'حدس‌زننده فقط به تعداد عدد سرنخ می‌تواند درست حدس بزند.',
                   ),
                 ]),
               ]),
@@ -553,9 +556,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     );
     _socket.on('players', (list) {
       setState(() {
-        _players = (list as List)
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+        _players =
+            (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
       });
     });
     _socket.on('setup', (data) {
@@ -1186,9 +1188,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: allAssigned
-                          ? () => _askHands(() => _start())
-                          : null,
+                      onPressed:
+                          allAssigned ? () => _askHands(() => _start()) : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         padding: const EdgeInsets.symmetric(
@@ -1532,16 +1533,15 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     super.initState();
     _maxHands = widget.maxHands;
     sounds.startTheme();
-    _shakeController =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 400),
-        )..addListener(() {
-          setState(() {
-            final t = _shakeController.value;
-            _shakeDx = sin(t * pi * 6) * 10 * (1 - t);
-          });
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    )..addListener(() {
+        setState(() {
+          final t = _shakeController.value;
+          _shakeDx = sin(t * pi * 6) * 10 * (1 - t);
         });
+      });
 
     if (widget.online) {
       _ready = false;
@@ -1789,17 +1789,15 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   void _updateTimer() {
     if (!widget.online || _winner != null || !_ready) return;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final int duration = _clue == null
-        ? 90
-        : 30 * (_clueNumber < 1 ? 1 : _clueNumber);
+    final int duration =
+        _clue == null ? 90 : 30 * (_clueNumber < 1 ? 1 : _clueNumber);
     final start = _clue == null ? _turnStart : _clueStart;
     final remaining = duration - (now - start) ~/ 1000;
     if (remaining != _remainingSec) {
       setState(() => _remainingSec = remaining);
     }
     if (remaining <= 0) {
-      final acting =
-          (_clue == null && widget.role == 'spymaster' ||
+      final acting = (_clue == null && widget.role == 'spymaster' ||
               _clue != null && widget.role == 'guesser') &&
           widget.myTeam == _currentTeam;
       if (acting) _endTurn();
@@ -1812,7 +1810,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           _currentTeam == widget.myTeam &&
           _winner == null;
     }
-    return _spymasterView;
+    return false;
   }
 
   void _trySubmitClue() {
@@ -1917,7 +1915,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       if (_remaining(_currentTeam) == 0) {
         sounds.playWin();
         setState(() => _setWinner(_currentTeam));
-      } else {
+      } else if (widget.online) {
         _guessesUsed++;
         if (_guessesUsed >= _clueNumber) {
           setState(() {
@@ -1950,10 +1948,10 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     final spyColor = colorCode == 'red'
         ? Colors.red
         : colorCode == 'blue'
-        ? Colors.blue
-        : colorCode == 'assassin'
-        ? Colors.black
-        : const Color(0xFFD9C69A);
+            ? Colors.blue
+            : colorCode == 'assassin'
+                ? Colors.black
+                : const Color(0xFFD9C69A);
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFE8D8B8),
@@ -2186,11 +2184,11 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
         const Text('آبی: ', style: TextStyle(color: Colors.white)),
         _scoreChip(Colors.blue, _remaining('blue')),
         const SizedBox(width: 20),
-        if (_clue != null && _winner == null)
+        if ((widget.online ? _clue != null : true) && _winner == null)
           TextButton(
             onPressed: _endTurn,
             child: const Text(
-              'پایان نوبت',
+              '🔚 پایان نوبت',
               style: TextStyle(color: Colors.white70),
             ),
           ),
@@ -2316,11 +2314,11 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 padding: const EdgeInsets.all(8),
                                 gridDelegate:
                                     const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 5,
-                                      mainAxisSpacing: 6,
-                                      crossAxisSpacing: 6,
-                                      childAspectRatio: 1.3,
-                                    ),
+                                  crossAxisCount: 5,
+                                  mainAxisSpacing: 6,
+                                  crossAxisSpacing: 6,
+                                  childAspectRatio: 1.3,
+                                ),
                                 itemCount: 25,
                                 itemBuilder: (context, index) {
                                   return FlipCard(
