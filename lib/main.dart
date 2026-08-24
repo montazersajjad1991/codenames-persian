@@ -1885,7 +1885,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           .showSnackBar(const SnackBar(content: Text('نوبت تیم شما نیست!')));
       return;
     }
-    if (_clue == null) {
+    if (widget.online && _clue == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('اول سرنخ‌ده باید سرنخ بدهد!')),
       );
@@ -2101,7 +2101,10 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   Widget _turnBanner() {
     final color = _currentTeam == 'red' ? Colors.red : Colors.blue;
     String text;
-    if (_clue == null) {
+    if (!widget.online) {
+      text =
+          'نوبت تیم ${_teamName(_currentTeam)} | سرنخ رو بلند بگید، بعد کارت بزنید';
+    } else if (_clue == null) {
       text = 'نوبت تیم ${_teamName(_currentTeam)} | سرنخ‌ده سرنخ بده';
     } else {
       text = 'سرنخ: «$_clue» $_clueNumber | حدس بزنید!';
