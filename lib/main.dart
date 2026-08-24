@@ -2335,18 +2335,22 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 850),
+                          constraints: const BoxConstraints(maxWidth: 700),
                           child: _ready
                               ? GridView.builder(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
-                                  padding: const EdgeInsets.all(4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
                                   gridDelegate:
                                       const SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 5,
                                         mainAxisSpacing: 6,
                                         crossAxisSpacing: 6,
-                                        childAspectRatio: 0.85, // ✅ ارتفاع کارت بیشتر شد تا متن کامل جا شود
+                                        childAspectRatio:
+                                            0.7, // کارت‌ها فیت صفحه لنداسکیپ
                                       ),
                                   itemCount: 25,
                                   itemBuilder: (context, index) {
