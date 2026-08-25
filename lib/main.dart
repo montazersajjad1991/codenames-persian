@@ -2460,7 +2460,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                     mainAxisSpacing: 6,
                                     crossAxisSpacing: 6,
                                     childAspectRatio:
-                                        1.15, // فیت شدن کامل ۵ ردیف در لنداسکیپ
+                                        1.6, // فیت شدن کامل ۵ ردیف در لنداسکیپ
                                   ),
                               itemCount: 25,
                               itemBuilder: (context, index) {
