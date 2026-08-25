@@ -104,88 +104,86 @@ class MainMenu extends StatelessWidget {
               fit: BoxFit.cover,
               alignment: Alignment.center,
             ),
-            // ۲. محتوای مرکزی شده برای حالت لنداسکیپ
+            // ۲. محتوای مرکزی شده برای حالت لنداسکیپ (بدون اسکرول)
             SafeArea(
               child: Center(
-                child: SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 500,
-                    ), // جلوگیری از پخش شدن بیش از حد در عرض
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 20,
-                      ),
-                      child: Column(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center, // وسط‌چین کردن عمودی
-                        children: [
-                          const Text(
-                            'اسم رمز',
-                            style: TextStyle(
-                              fontSize: 56,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black,
-                                  blurRadius: 12,
-                                  offset: Offset(3, 3),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black45,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text(
-                              'بازی حدس کلمات',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize:
+                          MainAxisSize.min, // جلوگیری از اشغال فضای اضافی
+                      children: [
+                        const Text(
+                          'اسم رمز',
+                          style: TextStyle(
+                            fontSize: 56,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black,
+                                blurRadius: 12,
+                                offset: Offset(3, 3),
                               ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'بازی حدس کلمات',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(height: 40),
-                          _buildButton(
-                            '🌐 بازی آنلاین ۴ نفره',
-                            const Color(0xFF1E88E5),
-                            () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const OnlineLobby(),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          _buildButton(
-                            '🎲 بازی دورهمی (آفلاین)',
-                            const Color(0xFF43A047),
-                            () => _askHandsOffline(context),
-                          ),
-                          const SizedBox(height: 14),
-                          _buildButton('📚 آموزش', const Color(0xFFFB8C00), () {
+                        ),
+                        const SizedBox(
+                          height: 24,
+                        ), // کاهش فاصله برای فیت شدن بهتر
+                        _buildButton(
+                          '🌐 بازی آنلاین ۴ نفره',
+                          const Color(0xFF1E88E5),
+                          () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const TutorialPage(),
+                                builder: (_) => const OnlineLobby(),
                               ),
                             );
-                          }),
-                          const SizedBox(height: 40),
-                        ],
-                      ),
+                          },
+                        ),
+                        const SizedBox(height: 12), // کاهش فاصله
+                        _buildButton(
+                          '🎲 بازی دورهمی (آفلاین)',
+                          const Color(0xFF43A047),
+                          () => _askHandsOffline(context),
+                        ),
+                        const SizedBox(height: 12), // کاهش فاصله
+                        _buildButton('📚 آموزش', const Color(0xFFFB8C00), () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const TutorialPage(),
+                            ),
+                          );
+                        }),
+                      ],
                     ),
                   ),
                 ),
