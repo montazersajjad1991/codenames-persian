@@ -19,6 +19,7 @@ Future<void> _lockLandscape() async {
 
 void main() async {
   await _lockLandscape();
+  sounds.startTheme(); // موزیک پس‌زمینه از همان منوی اصلی پخش می‌شود
   runApp(const CodenamesApp());
 }
 
@@ -27,16 +28,26 @@ class SoundManager {
   final AudioPlayer _player = AudioPlayer();
   final AudioPlayer _music = AudioPlayer();
   bool _isMuted = false;
+  bool _themeStarted = false;
 
   bool get isMuted => _isMuted;
+
+  SoundManager() {
+    // حالت lowLatency باعث می‌شود صدای افکت‌ها روی اندروید
+    // فوکوس صدا را ندزدد و موزیک پس‌زمینه قطع نشود
+    _player.setPlayerMode(PlayerMode.lowLatency);
+  }
 
   void toggleMute() {
     _isMuted = !_isMuted;
     if (_isMuted) {
       _music.pause();
-      _player.pause();
     } else {
-      startTheme();
+      if (_themeStarted) {
+        _music.resume();
+      } else {
+        startTheme();
+      }
     }
   }
 
@@ -54,7 +65,8 @@ class SoundManager {
   void playLose() => _play('lose.mp3');
 
   void startTheme() {
-    if (_isMuted) return;
+    if (_isMuted || _themeStarted) return;
+    _themeStarted = true;
     try {
       _music.setReleaseMode(ReleaseMode.loop);
       _music.setVolume(0.35);
@@ -2113,7 +2125,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
             child: Transform.rotate(
               angle: 3.14159,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 3),
+                padding: const EdgeInsets.symmetric(vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.75),
                   borderRadius: BorderRadius.circular(4),
@@ -2136,9 +2148,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           Positioned(
             left: 5,
             right: 5,
-            bottom: 5,
+            bottom: 4,
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(4),
@@ -2399,44 +2411,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFF1E1E2E),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF2D1B4E),
-          leading: IconButton(
-            icon: const Icon(Icons.exit_to_app, color: Colors.white),
-            onPressed: () {
-              if (widget.online) widget.socket!.emit('leave');
-              Navigator.pop(context);
-            },
-          ),
-          title: Text(
-            widget.online
-                ? 'اتاق ${widget.roomCode ?? ''} | تیم ${_teamName(widget.myTeam)}'
-                : 'صفحه بازی',
-            style: const TextStyle(color: Colors.white, fontSize: 16),
-          ),
-          actions: [
-            // دکمه قطع و وصل صدا
-            IconButton(
-              icon: Icon(
-                sounds.isMuted ? Icons.volume_off : Icons.volume_up,
-                color: Colors.white,
-              ),
-              onPressed: () {
-                sounds.toggleMute();
-                setState(() {});
-              },
-            ),
-            if (!widget.online)
-              IconButton(
-                icon: Icon(
-                  _spymasterView ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.white,
-                ),
-                onPressed: () =>
-                    setState(() => _spymasterView = !_spymasterView),
-              ),
-          ],
-        ),
+
         body: Stack(
           children: [
             Transform.translate(
@@ -2460,7 +2435,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                     mainAxisSpacing: 6,
                                     crossAxisSpacing: 6,
                                     childAspectRatio:
-                                        2.2, // فیت شدن کامل ۵ ردیف در لنداسکیپ
+                                        1.8, // فیت شدن کامل ۵ ردیف در لنداسکیپ
                                   ),
                               itemCount: 25,
                               itemBuilder: (context, index) {
@@ -2494,6 +2469,67 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         children: [
+                          // دکمه‌های کنترل: خروج کنار چشم و صدا
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.exit_to_app,
+                                  color: Colors.white70,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  if (widget.online)
+                                    widget.socket!.emit('leave');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              if (!widget.online)
+                                IconButton(
+                                  icon: Icon(
+                                    _spymasterView
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: Colors.white70,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(
+                                    () => _spymasterView = !_spymasterView,
+                                  ),
+                                ),
+                              IconButton(
+                                icon: Icon(
+                                  sounds.isMuted
+                                      ? Icons.volume_off
+                                      : Icons.volume_up,
+                                  color: Colors.white70,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  sounds.toggleMute();
+                                  setState(() {});
+                                },
+                              ),
+                            ],
+                          ),
+                          if (widget.online)
+                            Text(
+                              'اتاق ${widget.roomCode ?? ''} | تیم ${_teamName(widget.myTeam)}',
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 11,
+                              ),
+                            ),
+                          // بازی چند چنده + وضعیت دست‌ها
+                          Text(
+                            'بازی $_maxHands دسته | دست $_hand | قرمز $_redWins - $_blueWins آبی',
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           // بنر نوبت فشرده
                           Container(
                             width: double.infinity,
