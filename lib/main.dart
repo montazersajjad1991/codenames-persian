@@ -26,8 +26,22 @@ void main() async {
 class SoundManager {
   final AudioPlayer _player = AudioPlayer();
   final AudioPlayer _music = AudioPlayer();
+  bool _isMuted = false;
+
+  bool get isMuted => _isMuted;
+
+  void toggleMute() {
+    _isMuted = !_isMuted;
+    if (_isMuted) {
+      _music.pause();
+      _player.pause();
+    } else {
+      startTheme();
+    }
+  }
 
   void _play(String file) {
+    if (_isMuted) return;
     try {
       _player.play(AssetSource('audio/$file')).catchError((_) {});
     } catch (_) {}
@@ -40,6 +54,7 @@ class SoundManager {
   void playLose() => _play('lose.mp3');
 
   void startTheme() {
+    if (_isMuted) return;
     try {
       _music.setReleaseMode(ReleaseMode.loop);
       _music.setVolume(0.35);
@@ -155,7 +170,7 @@ class MainMenu extends StatelessWidget {
                           ),
                           const SizedBox(height: 14),
                           _buildButton(
-                            '🎲 بازی دورهمی (یک گوشی)',
+                            '🎲 بازی دورهمی (آفلاین)',
                             const Color(0xFF43A047),
                             () => _askHandsOffline(context),
                           ),
@@ -551,8 +566,9 @@ class _OnlineLobbyState extends State<OnlineLobby> {
   String _status = 'در حال اتصال به سرور...';
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _joinController = TextEditingController();
-  final TextEditingController _roomNameController = TextEditingController();
   bool _isPublic = true;
+  List<String> _friends = [];
+  final TextEditingController _friendIdController = TextEditingController();
   String _mode = 'main';
   int _maxHands = 3;
   List<Map<String, dynamic>> _publicRooms = [];
@@ -624,18 +640,14 @@ class _OnlineLobbyState extends State<OnlineLobby> {
 
   void _createRoom() {
     final name = _nameController.text.trim();
-    final roomName = _roomNameController.text.trim();
     if (name.isEmpty) {
       setState(() => _status = 'اول اسمت رو بنویس!');
       return;
     }
-    if (roomName.isEmpty) {
-      setState(() => _status = 'اسم اتاق رو بنویس!');
-      return;
-    }
+    // سرور خودش کد ۵ رقمی رندوم می‌سازد، ما فقط نام و حالت عمومی/خصوصی را می‌فرستیم
     _socket.emitWithAck(
       'create_room',
-      {'name': name, 'roomName': roomName, 'isPublic': _isPublic},
+      {'name': name, 'isPublic': _isPublic},
       ack: (res) {
         setState(() {
           _roomCode = res['code'];
@@ -643,6 +655,22 @@ class _OnlineLobbyState extends State<OnlineLobby> {
         });
       },
     );
+  }
+
+  void _addFriend() {
+    final friendId = _friendIdController.text.trim();
+    if (friendId.isNotEmpty && !_friends.contains(friendId)) {
+      setState(() => _friends.add(friendId));
+      _friendIdController.clear();
+      _socket.emit('add_friend', {
+        'friendId': friendId,
+      }); // ارسال به سرور (اگر پشتیبانی کند)
+    }
+  }
+
+  void _removeFriend(String friendId) {
+    setState(() => _friends.remove(friendId));
+    _socket.emit('remove_friend', {'friendId': friendId});
   }
 
   void _joinRoom() {
@@ -872,6 +900,93 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                   ),
                 ),
                 const SizedBox(height: 20),
+                // بخش مدیریت دوستان
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '👥 لیست دوستان',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _friendIdController,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                              decoration: const InputDecoration(
+                                hintText: 'آیدی دوست...',
+                                hintStyle: TextStyle(color: Colors.white54),
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.white10,
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _addFriend,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                            ),
+                            child: const Text(
+                              'افزودن',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_friends.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _friends
+                              .map(
+                                (f) => Chip(
+                                  label: Text(
+                                    f,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  backgroundColor: Colors.blueGrey,
+                                  deleteIcon: const Icon(
+                                    Icons.close,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                  onDeleted: () => _removeFriend(f),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
                 if (_roomCode == null) ...[
                   TextField(
                     controller: _nameController,
@@ -946,20 +1061,12 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                     ),
                   ],
                   if (_mode == 'create') ...[
-                    TextField(
-                      controller: _roomNameController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'اسم اتاق (مثلاً: اتاق خانواده)',
-                        hintStyle: const TextStyle(color: Colors.white38),
-                        filled: true,
-                        fillColor: Colors.white10,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
+                    const Text(
+                      'یک کد ۵ رقمی رندوم به صورت خودکار برای اتاق شما ساخته می‌شود.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1518,8 +1625,8 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   final List<String> _cardColors = [];
   final List<bool> _revealed = [];
   final List<String> _cardArt = [];
+  final List<double> _cardRotations = []; // برای چرخش طبیعی و دستی کارت‌ها
   final TextEditingController _clueController = TextEditingController();
-
   bool _spymasterView = false;
   String _currentTeam = 'red';
   String? _clue;
@@ -1742,6 +1849,14 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       ..clear()
       ..addAll([
         for (int i = 0; i < 25; i++) _randomArt(_cardColors[i], random),
+      ]);
+
+    _cardRotations
+      ..clear()
+      ..addAll([
+        for (int i = 0; i < 25; i++)
+          (random.nextDouble() - 0.5) *
+              0.15, // چرخش رندوم بین -0.075 تا 0.075 رادیان
       ]);
 
     _revealed
@@ -2299,9 +2414,20 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
             widget.online
                 ? 'اتاق ${widget.roomCode ?? ''} | تیم ${_teamName(widget.myTeam)}'
                 : 'صفحه بازی',
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white, fontSize: 16),
           ),
           actions: [
+            // دکمه قطع و وصل صدا
+            IconButton(
+              icon: Icon(
+                sounds.isMuted ? Icons.volume_off : Icons.volume_up,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                sounds.toggleMute();
+                setState(() {});
+              },
+            ),
             if (!widget.online)
               IconButton(
                 icon: Icon(
@@ -2311,66 +2437,195 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                 onPressed: () =>
                     setState(() => _spymasterView = !_spymasterView),
               ),
-            if (!widget.online || widget.isHost)
-              IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                onPressed: () => setState(() => _startNewGame()),
-              ),
           ],
-        ),
-        bottomNavigationBar: Container(
-          color: const Color(0xFF2D1B4E),
-          padding: const EdgeInsets.all(10),
-          child: _showClueUI() ? _clueForm() : _playBar(),
         ),
         body: Stack(
           children: [
             Transform.translate(
               offset: Offset(_shakeDx, 0),
-              child: Column(
+              child: Row(
+                // تغییر از Column به Row برای چیدمان ۸۰/۲۰
                 children: [
-                  _turnBanner(),
+                  // ۸۰٪ سمت راست: گرید کارت‌ها (در RTL اولین فرزند سمت راست است)
                   Expanded(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 700),
-                          child: _ready
-                              ? GridView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
+                    flex: 8,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6.0),
+                      child: _ready
+                          ? GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding: const EdgeInsets.all(4),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 5,
+                                    mainAxisSpacing: 6,
+                                    crossAxisSpacing: 6,
+                                    childAspectRatio:
+                                        0.75, // فیت شدن کامل در ۸۰٪ عرض
                                   ),
-                                  gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 5,
-                                        mainAxisSpacing: 6,
-                                        crossAxisSpacing: 6,
-                                        childAspectRatio:
-                                            0.7, // کارت‌ها فیت صفحه لنداسکیپ
-                                      ),
-                                  itemCount: 25,
-                                  itemBuilder: (context, index) {
-                                    return FlipCard(
-                                      revealed: _revealed[index],
-                                      onTap: () => _tapCard(index),
-                                      front: _hiddenCard(
-                                        _words[index],
-                                        _cardColors[index],
-                                      ),
-                                      back: _revealedCard(
-                                        _words[index],
-                                        _cardColors[index],
-                                        _cardArt[index],
-                                      ),
-                                    );
-                                  },
-                                )
-                              : const _WaitingView(),
-                        ),
+                              itemCount: 25,
+                              itemBuilder: (context, index) {
+                                return Transform.rotate(
+                                  angle:
+                                      _cardRotations[index], // اعمال چرخش طبیعی
+                                  child: FlipCard(
+                                    revealed: _revealed[index],
+                                    onTap: () => _tapCard(index),
+                                    front: _hiddenCard(
+                                      _words[index],
+                                      _cardColors[index],
+                                    ),
+                                    back: _revealedCard(
+                                      _words[index],
+                                      _cardColors[index],
+                                      _cardArt[index],
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : const _WaitingView(),
+                    ),
+                  ),
+                  // ۲۰٪ سمت چپ: پنل کنترل
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      color: const Color(0xFF252538),
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          // بنر نوبت فشرده
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _currentTeam == 'red'
+                                  ? Colors.red
+                                  : Colors.blue,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _clue == null
+                                  ? 'نوبت: ${_teamName(_currentTeam)}'
+                                  : 'سرنخ: $_clue ($_clueNumber)',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // امتیازات
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _scoreChip(Colors.red, _remaining('red')),
+                              const Text(
+                                'vs',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                              _scoreChip(Colors.blue, _remaining('blue')),
+                            ],
+                          ),
+                          const Spacer(),
+                          // فرم سرنخ یا دکمه پایان نوبت
+                          if (_showClueUI()) ...[
+                            TextField(
+                              controller: _clueController,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'سرنخ...',
+                                hintStyle: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                                filled: true,
+                                fillColor: Colors.white10,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButton<int>(
+                              value: _selectedNumber,
+                              isExpanded: true,
+                              dropdownColor: const Color(0xFF2D1B4E),
+                              style: const TextStyle(color: Colors.white),
+                              items: [
+                                for (int i = 0; i <= 9; i++)
+                                  DropdownMenuItem(
+                                    value: i,
+                                    child: Text(
+                                      '$i',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (v) =>
+                                  setState(() => _selectedNumber = v ?? 1),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _trySubmitClue,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'ثبت',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ] else if (_winner == null) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _endTurn,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                ),
+                                child: const Text(
+                                  '🔚 پایان نوبت',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          if (widget.online && _winner == null)
+                            Text(
+                              '⏱ $_remainingSec',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
