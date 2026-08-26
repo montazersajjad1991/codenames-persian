@@ -15,21 +15,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
-  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
     - assets/audio/
-
-# تنظیمات ساخت آیکون برنامه
-flutter_launcher_icons:
-  android: "launcher_icon"
-  ios: true
-  # نکته حیاتی: تصویر logo.png باید دقیقاً مربعی باشد (مثلاً 1024x1024 پیکسل)
-  # تا سیستم عامل آن را در مرکز با حاشیه زشت نمایش ندهد.
-  image_path: "assets/images/logo.png" 
-  adaptive_icon_background: "#1E1E2E" # رنگ پس‌زمینه هماهنگ با تم تاریک بازی شما
-  adaptive_icon_foreground: "assets/images/logo.png"

@@ -8,18 +8,34 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 import 'words.dart';
 
-Future<void> _lockLandscape() async {
+Future<void> _setPortrait() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  } catch (_) {
+    // روی ویندوز/وب پشتیبانی نمی‌شود
+  }
+}
+
+Future<void> _setLandscape() async {
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  } catch (_) {
+    // روی ویندوز/وب پشتیبانی نمی‌شود
+  }
 }
 
 void main() async {
-  await _lockLandscape();
-  sounds.startTheme(); // موزیک پس‌زمینه از همان منوی اصلی پخش می‌شود
+  await _setPortrait(); // اپ در حالت عمودی شروع می‌شود
+  sounds.startTheme();
   runApp(const CodenamesApp());
 }
 
@@ -33,9 +49,27 @@ class SoundManager {
   bool get isMuted => _isMuted;
 
   SoundManager() {
-    // حالت lowLatency باعث می‌شود صدای افکت‌ها روی اندروید
-    // فوکوس صدا را ندزدد و موزیک پس‌زمینه قطع نشود
-    _player.setPlayerMode(PlayerMode.lowLatency);
+    // تنظیم AudioContext برای جلوگیری از قطع موزیک
+    final context = AudioContext(
+      android: const AudioContextAndroid(
+        isSpeakerphoneOn: false,
+        stayAwake: true,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.media,
+        audioFocus: AndroidAudioFocus.none, // عدم گرفتن فوکوس صدا
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playback,
+        options: const {
+          AVAudioSessionOptions.mixWithOthers
+        }, // ترکیب با سایر صداها
+      ),
+    );
+    AudioPlayer.global.setGlobalAudioContext(context);
+
+    // همچنین برای _music هم تنظیم کن
+    _music.setAudioContext(context);
+    _player.setAudioContext(context);
   }
 
   void toggleMute() {
@@ -454,12 +488,14 @@ class TutorialPage extends StatelessWidget {
               _box([
                 _rule(1, [
                   const TextSpan(
-                    text: 'سرنخ‌ده، رنگ کارت‌ها را می‌بیند و یک کلمه + یک عدد می‌دهد (حداکثر ۱۵ کاراکتر با احتساب فاصله، بدون عدد، انگلیسی و کلمه روی میز).',
+                    text:
+                        'سرنخ‌ده، رنگ کارت‌ها را می‌بیند و یک کلمه + یک عدد می‌دهد (حداکثر ۱۵ کاراکتر با احتساب فاصله، بدون عدد، انگلیسی و کلمه روی میز).',
                   ),
                 ]),
                 _rule(2, [
                   const TextSpan(
-                    text: 'سرنخ‌ده ۹۰ ثانیه وقت دارد؛ حدس‌زننده ۳۰ ثانیه به ازای هر عدد گفته‌شده (سرنخ ۲ = ۶۰ ثانیه). دیر بجنبی، نوبت می‌سوزه!',
+                    text:
+                        'سرنخ‌ده ۹۰ ثانیه وقت دارد؛ حدس‌زننده ۳۰ ثانیه به ازای هر عدد گفته‌شده (سرنخ ۲ = ۶۰ ثانیه). دیر بجنبی، نوبت می‌سوزه!',
                   ),
                 ]),
                 _rule(3, [
@@ -501,7 +537,8 @@ class TutorialPage extends StatelessWidget {
                 ]),
                 _rule(5, [
                   const TextSpan(
-                    text: 'حدس‌زننده فقط به تعداد عدد سرنخ می‌تواند درست حدس بزند.',
+                    text:
+                        'حدس‌زننده فقط به تعداد عدد سرنخ می‌تواند درست حدس بزند.',
                   ),
                 ]),
               ]),
@@ -601,9 +638,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     );
     _socket.on('players', (list) {
       setState(() {
-        _players = (list as List)
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+        _players =
+            (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
       });
     });
     _socket.on('setup', (data) {
@@ -1325,9 +1361,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: allAssigned
-                          ? () => _askHands(() => _start())
-                          : null,
+                      onPressed:
+                          allAssigned ? () => _askHands(() => _start()) : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         padding: const EdgeInsets.symmetric(
@@ -1664,23 +1699,34 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   Timer? _tickTimer;
 
   late AnimationController _shakeController;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
   double _shakeDx = 0;
+  bool _showTurnChangeMessage = false;
 
   @override
   void initState() {
     super.initState();
+    _setLandscape(); // وقتی وارد بازی می‌شویم، حالت افقی فعال شود
     _maxHands = widget.maxHands;
     sounds.startTheme();
-    _shakeController =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 400),
-        )..addListener(() {
-          setState(() {
-            final t = _shakeController.value;
-            _shakeDx = sin(t * pi * 6) * 10 * (1 - t);
-          });
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    )..addListener(() {
+        setState(() {
+          final t = _shakeController.value;
+          _shakeDx = sin(t * pi * 6) * 10 * (1 - t);
         });
+      });
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
 
     if (widget.online) {
       _ready = false;
@@ -1722,8 +1768,10 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   void dispose() {
     _tickTimer?.cancel();
     _shakeController.dispose();
+    _pulseController.dispose();
     _clueController.dispose();
     if (widget.online) widget.socket!.disconnect();
+    _setPortrait(); // وقتی از بازی خارج می‌شویم، دوباره عمودی شود
     super.dispose();
   }
 
@@ -1863,11 +1911,15 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
 
     _cardRotations
       ..clear()
-      ..addAll([
-        for (int i = 0; i < 25; i++)
-          (random.nextDouble() - 0.5) *
-              0.15, // چرخش رندوم بین -0.075 تا 0.075 رادیان
-      ]);
+      ..addAll(List.generate(25, (i) {
+        // ۸۰٪ کارت‌ها صاف، ۲۰٪ کارت‌ها کج
+        if (random.nextDouble() < 0.8) {
+          return 0.0; // صاف
+        } else {
+          return (random.nextDouble() - 0.5) *
+              0.2; // کج: بین -0.1 تا 0.1 رادیان
+        }
+      }));
 
     _revealed
       ..clear()
@@ -1936,17 +1988,15 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   void _updateTimer() {
     if (!widget.online || _winner != null || !_ready) return;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final int duration = _clue == null
-        ? 90
-        : 30 * (_clueNumber < 1 ? 1 : _clueNumber);
+    final int duration =
+        _clue == null ? 90 : 30 * (_clueNumber < 1 ? 1 : _clueNumber);
     final start = _clue == null ? _turnStart : _clueStart;
     final remaining = duration - (now - start) ~/ 1000;
     if (remaining != _remainingSec) {
       setState(() => _remainingSec = remaining);
     }
     if (remaining <= 0) {
-      final acting =
-          (_clue == null && widget.role == 'spymaster' ||
+      final acting = (_clue == null && widget.role == 'spymaster' ||
               _clue != null && widget.role == 'guesser') &&
           widget.myTeam == _currentTeam;
       if (acting) _endTurn();
@@ -2009,6 +2059,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   }
 
   void _endTurn() {
+    final oldTeam = _currentTeam;
     setState(() {
       _currentTeam = _currentTeam == 'red' ? 'blue' : 'red';
       _clue = null;
@@ -2017,6 +2068,19 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       _turnStart = DateTime.now().millisecondsSinceEpoch;
     });
     if (widget.online) _sync();
+
+    // نمایش پیام "نوبت عوض شد" و تپش دکمه
+    _showTurnChangeMessage = true;
+    _pulseController.repeat(reverse: true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showTurnChangeMessage = false;
+        });
+        _pulseController.stop();
+        _pulseController.reset();
+      }
+    });
   }
 
   void _tapCard(int index) {
@@ -2097,10 +2161,10 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     final spyColor = colorCode == 'red'
         ? Colors.red
         : colorCode == 'blue'
-        ? Colors.blue
-        : colorCode == 'assassin'
-        ? Colors.black
-        : const Color(0xFFD9C69A);
+            ? Colors.blue
+            : colorCode == 'assassin'
+                ? Colors.black
+                : const Color(0xFFD9C69A);
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFE8D8B8),
@@ -2242,6 +2306,34 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           color: Colors.white,
           fontWeight: FontWeight.bold,
           fontSize: 16,
+        ),
+      ),
+    );
+  }
+
+  Widget _resultChip(Color color, int count) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.5),
+            blurRadius: 8,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          '$count',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
       ),
     );
@@ -2411,7 +2503,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFF1E1E2E),
-
         body: Stack(
           children: [
             Transform.translate(
@@ -2431,12 +2522,12 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                               padding: const EdgeInsets.all(4),
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 5,
-                                    mainAxisSpacing: 6,
-                                    crossAxisSpacing: 6,
-                                    childAspectRatio:
-                                        1.8, // فیت شدن کامل ۵ ردیف در لنداسکیپ
-                                  ),
+                                crossAxisCount: 5,
+                                mainAxisSpacing: 6,
+                                crossAxisSpacing: 6,
+                                childAspectRatio:
+                                    1.8, // فیت شدن کامل ۵ ردیف در لنداسکیپ
+                              ),
                               itemCount: 25,
                               itemBuilder: (context, index) {
                                 return Transform.rotate(
@@ -2552,17 +2643,45 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          // امتیازات
+                          const SizedBox(height: 8),
+                          // نمایش شماره دست
+                          Text(
+                            'دست $_hand',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          // نمایش نتیجه با بیضی‌های رنگی
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              _scoreChip(Colors.red, _remaining('red')),
+                              _resultChip(Colors.red, _redWins),
                               const Text(
-                                'vs',
-                                style: TextStyle(color: Colors.white70),
+                                '-',
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 16),
                               ),
-                              _scoreChip(Colors.blue, _remaining('blue')),
+                              _resultChip(Colors.blue, _blueWins),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          // تعداد کارت‌های باقی‌مانده (کوچک‌تر)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              Text(
+                                '${_remaining('red')} کارت',
+                                style: const TextStyle(
+                                    color: Colors.red, fontSize: 10),
+                              ),
+                              Text(
+                                '${_remaining('blue')} کارت',
+                                style: const TextStyle(
+                                    color: Colors.blue, fontSize: 10),
+                              ),
                             ],
                           ),
                           const Spacer(),
@@ -2629,21 +2748,48 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                               ),
                             ),
                           ] else if (_winner == null) ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _endTurn,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
+                            // پیام "نوبت عوض شد" که محو می‌شود
+                            if (_showTurnChangeMessage)
+                              Container(
+                                width: double.infinity,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: const Text(
-                                  '🔚 پایان نوبت',
+                                  '✓ نوبت عوض شد',
+                                  textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            // دکمه پایان نوبت با تپش
+                            ScaleTransition(
+                              scale: _showTurnChangeMessage
+                                  ? _pulseAnimation
+                                  : const AlwaysStoppedAnimation(1.0),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _endTurn,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orange,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    elevation: _showTurnChangeMessage ? 8 : 2,
+                                  ),
+                                  child: const Text(
+                                    '🔚 پایان نوبت',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
