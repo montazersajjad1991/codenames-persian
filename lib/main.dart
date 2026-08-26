@@ -8,6 +8,15 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 import 'words.dart';
 
+final SoundManager sounds = SoundManager();
+
+IO.Socket createSocket() {
+  return IO.io('http://10.0.2.2:3000', <String, dynamic>{
+    'transports': ['websocket'],
+    'autoConnect': true,
+  });
+}
+
 Future<void> _setPortrait() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
