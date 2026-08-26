@@ -48,37 +48,13 @@ class SoundManager {
 
   bool get isMuted => _isMuted;
 
-  SoundManager() {
-    // تنظیم AudioContext برای جلوگیری از قطع موزیک
-    final context = AudioContext(
-      android: const AudioContextAndroid(
-        isSpeakerphoneOn: false,
-        stayAwake: true,
-        contentType: AndroidContentType.music,
-        usageType: AndroidUsageType.media,
-        audioFocus: AndroidAudioFocus.none, // عدم گرفتن فوکوس صدا
-      ),
-      iOS: AudioContextIOS(
-        category: AVAudioSessionCategory.playback,
-        options: const {
-          AVAudioSessionOptions.mixWithOthers
-        }, // ترکیب با سایر صداها
-      ),
-    );
-    AudioPlayer.global.setGlobalAudioContext(context);
-
-    // همچنین برای _music هم تنظیم کن
-    _music.setAudioContext(context);
-    _player.setAudioContext(context);
-  }
-
   void toggleMute() {
     _isMuted = !_isMuted;
     if (_isMuted) {
       _music.pause();
     } else {
       if (_themeStarted) {
-        _music.resume();
+        _music.resume().catchError((_) {});
       } else {
         startTheme();
       }
@@ -89,6 +65,14 @@ class SoundManager {
     if (_isMuted) return;
     try {
       _player.play(AssetSource('audio/$file')).catchError((_) {});
+
+      // ترفند جلوگیری از قطع موزیک پس‌زمینه در اندروید/وب
+      // بلافاصله بعد از پخش افکت، دستور ادامه پخش موزیک ارسال می‌شود
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!_isMuted && _themeStarted) {
+          _music.resume().catchError((_) {});
+        }
+      });
     } catch (_) {}
   }
 
@@ -107,15 +91,6 @@ class SoundManager {
       _music.play(AssetSource('audio/theme.mp3')).catchError((_) {});
     } catch (_) {}
   }
-}
-
-final SoundManager sounds = SoundManager();
-
-IO.Socket createSocket() {
-  return IO.io(
-    'http://localhost:3000',
-    IO.OptionBuilder().setTransports(['websocket']).enableForceNew().build(),
-  );
 }
 
 class CodenamesApp extends StatelessWidget {
