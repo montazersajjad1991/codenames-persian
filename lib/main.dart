@@ -2114,7 +2114,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       ..clear()
       ..addAll(List.filled(25, false));
 
-    _currentTeam = 'red';
     _clue = null;
     _clueNumber = 1;
     _guessesUsed = 0;
