@@ -36,7 +36,13 @@ Future<void> _setLandscape() async {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    // قفل کامل جهت صفحه و مخفی کردن نوارهای سیستم
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // جلوگیری از چرخش خودکار
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
   } catch (_) {
     // روی ویندوز/وب پشتیبانی نمی‌شود
   }
@@ -393,13 +399,58 @@ class _MainMenuState extends State<MainMenu>
           backgroundColor: const Color(0xFF252538),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text(
-            'چند دست بازی می‌کنید؟',
-            style: TextStyle(color: Colors.white),
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Color(0xFFE8B33C), size: 24),
+              SizedBox(width: 8),
+              Text(
+                'چند دست بازی می‌کنید؟',
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
-          content: const Text(
-            'اول بین خودتون مشخص کنید کی قرمزه و کی آبی.\nتیمی که بیشترین دست رو ببره، برندهٔ بازیه.',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '🎮 راهنمای شروع بازی:',
+                style: TextStyle(
+                    color: Color(0xFFE8B33C),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '۱. مشخص کنید کدام تیم قرمز و کدام تیم آبی است',
+                style:
+                    TextStyle(color: Colors.white70, fontSize: 12, height: 1.6),
+              ),
+              const Text(
+                '۲. در هر تیم، یک نفر سرنخ‌ده و یک نفر حدس‌زننده باشد',
+                style:
+                    TextStyle(color: Colors.white70, fontSize: 12, height: 1.6),
+              ),
+              const Text(
+                '۳. تیمی که بیشترین دست را ببرد، برنده بازی است',
+                style:
+                    TextStyle(color: Colors.white70, fontSize: 12, height: 1.6),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '💡 نکته: می‌توانید با دکمه چشم در بالای صفحه، کارت‌ها را ببینید (مخصوص سرنخ‌ده)',
+                  style: TextStyle(
+                      color: Colors.orange, fontSize: 11, height: 1.4),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1820,6 +1871,8 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   late AnimationController _shakeController;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  late AnimationController _turnBannerPulseController;
+  late Animation<double> _turnBannerPulseAnimation;
   double _shakeDx = 0;
   bool _showTurnChangeMessage = false;
 
@@ -1845,6 +1898,15 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _turnBannerPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _turnBannerPulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(
+          parent: _turnBannerPulseController, curve: Curves.easeInOut),
     );
 
     if (widget.online) {
@@ -1888,6 +1950,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     _tickTimer?.cancel();
     _shakeController.dispose();
     _pulseController.dispose();
+    _turnBannerPulseController.dispose();
     _clueController.dispose();
     if (widget.online) widget.socket!.disconnect();
     _setPortrait(); // وقتی از بازی خارج می‌شویم، دوباره عمودی شود
@@ -2011,12 +2074,19 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       ..clear()
       ..addAll(shuffledWords.take(25));
 
+    // تعداد کارت قرمز و آبی به صورت رندوم (۸ یا ۹)
+    final redCount = random.nextBool() ? 9 : 8;
+    final blueCount = redCount == 9 ? 8 : 9;
+
     final colors = <String>[
-      for (int i = 0; i < 9; i++) 'red',
-      for (int i = 0; i < 8; i++) 'blue',
+      for (int i = 0; i < redCount; i++) 'red',
+      for (int i = 0; i < blueCount; i++) 'blue',
       for (int i = 0; i < 7; i++) 'neutral',
       'assassin',
     ]..shuffle(random);
+
+    // تیمی که ۹ کارت دارد، بازی را شروع می‌کند
+    _currentTeam = redCount == 9 ? 'red' : 'blue';
 
     _cardColors
       ..clear()
@@ -2244,10 +2314,16 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       sounds.playCorrect();
       HapticFeedback.heavyImpact();
       _shakeController.forward(from: 0);
+
+      // چک کردن برنده شدن بلافاصله بعد از زدن کارت درست
       if (_remaining(_currentTeam) == 0) {
         sounds.playWin();
         setState(() => _setWinner(_currentTeam));
-      } else if (widget.online) {
+        if (widget.online) _sync();
+        return;
+      }
+
+      if (widget.online) {
         _guessesUsed++;
         if (_guessesUsed >= _clueNumber) {
           setState(() {
@@ -2731,34 +2807,48 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 fontSize: 11,
                               ),
                             ),
-                          // بازی چند چنده + وضعیت دست‌ها
-                          Text(
-                            'بازی $_maxHands دسته | دست $_hand | قرمز $_redWins - $_blueWins آبی',
-                            style: const TextStyle(
-                              color: Colors.white60,
-                              fontSize: 11,
-                            ),
-                          ),
+
                           const SizedBox(height: 8),
-                          // بنر نوبت فشرده
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: _currentTeam == 'red'
-                                  ? Colors.red
-                                  : Colors.blue,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _clue == null
-                                  ? 'نوبت: ${_teamName(_currentTeam)}'
-                                  : 'سرنخ: $_clue ($_clueNumber)',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                          // بنر نوبت با ضربان
+                          ScaleTransition(
+                            scale: _turnBannerPulseAnimation,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: _currentTeam == 'red'
+                                      ? [Colors.red, Colors.red.shade700]
+                                      : [Colors.blue, Colors.blue.shade700],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (_currentTeam == 'red'
+                                            ? Colors.red
+                                            : Colors.blue)
+                                        .withOpacity(0.5),
+                                    blurRadius: 12,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                _clue == null
+                                    ? 'نوبت: ${_teamName(_currentTeam)}'
+                                    : 'سرنخ: $_clue ($_clueNumber)',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  shadows: [
+                                    Shadow(
+                                        color: Colors.black45,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2)),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
