@@ -132,8 +132,31 @@ class CodenamesApp extends StatelessWidget {
 }
 
 // ---------------- منوی اصلی ----------------
-class MainMenu extends StatelessWidget {
+class MainMenu extends StatefulWidget {
   const MainMenu({super.key});
+
+  @override
+  State<MainMenu> createState() => _MainMenuState();
+}
+
+class _MainMenuState extends State<MainMenu>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,101 +164,237 @@ class MainMenu extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         body: Stack(
-          fit: StackFit
-              .expand, // پر کردن کل صفحه بدون دفرمه شدن یا خالی ماندن سمت راست
+          fit: StackFit.expand,
           children: [
-            // ۱. بک‌گراند فیکس شده که کش نمی‌آید
+            // بک‌گراند
             Image.asset(
               'assets/images/menu_bg.png',
               fit: BoxFit.cover,
               alignment: Alignment.center,
             ),
-            // ۲. محتوای مرکزی شده برای حالت لنداسکیپ (بدون اسکرول)
+            // لایه گرادیان تیره برای خوانایی بهتر
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.25),
+                    Colors.black.withOpacity(0.65),
+                  ],
+                ),
+              ),
+            ),
+            // محتوا
             SafeArea(
               child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 500),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize:
-                          MainAxisSize.min, // جلوگیری از اشغال فضای اضافی
-                      children: [
-                        const Text(
-                          'اسم رمز',
-                          style: TextStyle(
-                            fontSize: 56,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black,
-                                blurRadius: 12,
-                                offset: Offset(3, 3),
-                              ),
-                            ],
-                          ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // عنوان با انیمیشن
+                      FadeTransition(
+                        opacity: CurvedAnimation(
+                          parent: _controller,
+                          curve:
+                              const Interval(0.0, 0.4, curve: Curves.easeOut),
                         ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black45,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'بازی حدس کلمات',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, -0.2),
+                            end: Offset.zero,
+                          ).animate(CurvedAnimation(
+                            parent: _controller,
+                            curve:
+                                const Interval(0.0, 0.4, curve: Curves.easeOut),
+                          )),
+                          child: _buildTitle(),
                         ),
-                        const SizedBox(
-                          height: 24,
-                        ), // کاهش فاصله برای فیت شدن بهتر
-                        _buildButton(
-                          '🌐 بازی آنلاین ۴ نفره',
-                          const Color(0xFF1E88E5),
-                          () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const OnlineLobby(),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12), // کاهش فاصله
-                        _buildButton(
-                          '🎲 بازی دورهمی (آفلاین)',
-                          const Color(0xFF43A047),
-                          () => _askHandsOffline(context),
-                        ),
-                        const SizedBox(height: 12), // کاهش فاصله
-                        _buildButton('📚 آموزش', const Color(0xFFFB8C00), () {
+                      ),
+                      const SizedBox(height: 48),
+                      // دکمه‌ها با انیمیشن ورود تدریجی
+                      _buildMenuButton(
+                        text: 'بازی آنلاین ۴ نفره',
+                        subtitle: 'با دوستانت از راه دور بازی کن',
+                        icon: Icons.wifi,
+                        gradient: const [Color(0xFF1E88E5), Color(0xFF1565C0)],
+                        delay: 200,
+                        onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const TutorialPage(),
-                            ),
+                                builder: (_) => const OnlineLobby()),
                           );
-                        }),
-                      ],
-                    ),
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _buildMenuButton(
+                        text: 'بازی دورهمی (آفلاین)',
+                        subtitle: 'یک گوشی، چند نفر',
+                        icon: Icons.people,
+                        gradient: const [Color(0xFF43A047), Color(0xFF2E7D32)],
+                        delay: 350,
+                        onTap: () => _askHandsOffline(context),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildMenuButton(
+                        text: 'آموزش',
+                        subtitle: 'قوانین و ترفندها',
+                        icon: Icons.school,
+                        gradient: const [Color(0xFFFB8C00), Color(0xFFEF6C00)],
+                        delay: 500,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const TutorialPage()),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTitle() {
+    return Column(
+      children: [
+        const Text(
+          'اسم رمز',
+          style: TextStyle(
+            fontSize: 64,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            shadows: [
+              Shadow(
+                  color: Colors.black54, blurRadius: 20, offset: Offset(0, 4)),
+              Shadow(
+                  color: Color(0xFFE8B33C),
+                  blurRadius: 40,
+                  offset: Offset(0, 0)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Colors.black54, Colors.black38],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white24),
+          ),
+          child: const Text(
+            'بازی حدس کلمات',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMenuButton({
+    required String text,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> gradient,
+    required VoidCallback onTap,
+    int delay = 0,
+  }) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 800 + delay),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 40 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: SizedBox(
+        width: double.infinity,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: gradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: gradient[0].withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            text,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_back_ios,
+                        color: Colors.white70, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -248,6 +407,8 @@ class MainMenu extends StatelessWidget {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF252538),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text(
             'چند دست بازی می‌کنید؟',
             style: TextStyle(color: Colors.white),
@@ -292,33 +453,7 @@ class MainMenu extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildButton(String text, Color color, VoidCallback? onTap) {
-    return SizedBox(
-      width: double.infinity, // پر کردن عرض چارچوب ۵۰۰ پیکسلی والد
-      height: 60,
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 6,
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
 }
-
 // ---------------- آموزش ----------------
 
 // ---------------- آموزش ----------------
