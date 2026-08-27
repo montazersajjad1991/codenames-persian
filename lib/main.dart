@@ -2033,7 +2033,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   final List<String> _cardColors = [];
   final List<bool> _revealed = [];
   final List<String> _cardArt = [];
-  final List<double> _cardRotations = []; // برای چرخش طبیعی و دستی کارت‌ها
   final TextEditingController _clueController = TextEditingController();
   bool _spymasterView = false;
   String _currentTeam = 'red';
@@ -2343,18 +2342,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
         for (int i = 0; i < 25; i++) _randomArt(_cardColors[i], random),
       ]);
 
-    _cardRotations
-      ..clear()
-      ..addAll(List.generate(25, (i) {
-        // ۸۰٪ کارت‌ها صاف، ۲۰٪ کارت‌ها کج
-        if (random.nextDouble() < 0.8) {
-          return 0.0; // صاف
-        } else {
-          return (random.nextDouble() - 0.5) *
-              0.2; // کج: بین -0.1 تا 0.1 رادیان
-        }
-      }));
-
     _revealed
       ..clear()
       ..addAll(List.filled(25, false));
@@ -2596,16 +2583,12 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     // 🔥 چک کردن برد بعد از هر reveal (مهم!)
     // اگر این کارت آخرین کارت رنگش بود، آن رنگ برنده است
     if (_remaining(color) == 0 && (color == 'red' || color == 'blue')) {
-      if (color == 'assassin') {
-        // این حالت در بالا هندل می‌شود
-      } else {
-        sounds.playWin();
-        HapticFeedback.heavyImpact();
-        _shakeController.forward(from: 0);
-        setState(() => _setWinner(color));
-        if (widget.online) _sync();
-        return;
-      }
+      sounds.playWin();
+      HapticFeedback.heavyImpact();
+      _shakeController.forward(from: 0);
+      setState(() => _setWinner(color));
+      if (widget.online) _sync();
+      return;
     }
 
     if (color == 'assassin') {
@@ -2624,28 +2607,17 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       sounds.playCorrect();
       HapticFeedback.heavyImpact();
       _shakeController.forward(from: 0);
-
-      // چک اتمام حدس‌ها و تغییر نوبت با اعلان
       if (widget.online) {
         _guessesUsed++;
         if (_guessesUsed >= _clueNumber) {
           _changeTurnWithNotification();
         }
       }
-          } else if (color == 'neutral') {
-        sounds.playWrong();
-        // طبق قوانین شما: کارت خنثی نوبت را تمام نمی‌کند
-        if (widget.online) {
-          _guessesUsed++;
-        }
-      } else {
+    } else if (color == 'neutral') {
       sounds.playWrong();
-      // کارت خنثی فقط یک حدس استفاده می‌کند، نوبت عوض نمی‌شود
+      // کارت خنثی نوبت را عوض نمی‌کند
       if (widget.online) {
         _guessesUsed++;
-        if (_guessesUsed >= _clueNumber) {
-          _changeTurnWithNotification();
-        }
       }
     } else {
       // کارت حریف → نوبت عوض می‌شود
@@ -3144,26 +3116,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // پس‌زمینه مه‌آلود به رنگ تیمِ نوبت‌دار
-            Positioned.fill(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 900),
-                curve: Curves.easeInOut,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      (_currentTeam == 'red' ? Colors.red : Colors.blue)
-                          .withOpacity(
-                              widget.online && _isMyTurn() ? 0.40 : 0.20),
-                      (_currentTeam == 'red' ? Colors.red : Colors.blue)
-                          .withOpacity(0.10),
-                      const Color(0xFF1E1E2E).withOpacity(0.0),
-                    ],
-                    stops: const [0.0, 0.5, 1.0],
-                  ),
-                ),
-              ),
-            ),
             Transform.translate(
               offset: Offset(_shakeDx, 0),
               child: Row(
@@ -3189,22 +3141,17 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                               ),
                               itemCount: 25,
                               itemBuilder: (context, index) {
-                                return Transform.rotate(
-                                  angle: index < _cardRotations.length
-                                      ? _cardRotations[index]
-                                      : 0.0, // اعمال چرخش طبیعی
-                                  child: FlipCard(
-                                    revealed: _revealed[index],
-                                    onTap: () => _tapCard(index),
-                                    front: _hiddenCard(
-                                      _words[index],
-                                      _cardColors[index],
-                                    ),
-                                    back: _revealedCard(
-                                      _words[index],
-                                      _cardColors[index],
-                                      _cardArt[index],
-                                    ),
+                                return FlipCard(
+                                  revealed: _revealed[index],
+                                  onTap: () => _tapCard(index),
+                                  front: _hiddenCard(
+                                    _words[index],
+                                    _cardColors[index],
+                                  ),
+                                  back: _revealedCard(
+                                    _words[index],
+                                    _cardColors[index],
+                                    _cardArt[index],
                                   ),
                                 );
                               },
@@ -3216,7 +3163,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                   Expanded(
                     flex: 2,
                     child: Container(
-                      color: const Color(0xFF252538).withOpacity(0.95),
+                      color: widget.online && _isMyTurn()
+                          ? const Color(0xFF8A7A55) // خاکی تیره برای نوبت‌دار
+                          : const Color(0xFF252538).withOpacity(0.95),
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         children: [
