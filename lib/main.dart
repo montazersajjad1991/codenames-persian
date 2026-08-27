@@ -3141,7 +3141,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFF1E1E2E),
+        backgroundColor: Colors.transparent,
         body: Stack(
           children: [
             // پس‌زمینه مه‌آلود به رنگ تیمِ نوبت‌دار
@@ -3216,7 +3216,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                   Expanded(
                     flex: 2,
                     child: Container(
-                      color: const Color(0xFF252538),
+                      color: const Color(0xFF252538).withOpacity(0.95),
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         children: [
