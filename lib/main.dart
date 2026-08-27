@@ -2632,7 +2632,13 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           _changeTurnWithNotification();
         }
       }
-    } else if (color == 'neutral') {
+          } else if (color == 'neutral') {
+        sounds.playWrong();
+        // طبق قوانین شما: کارت خنثی نوبت را تمام نمی‌کند
+        if (widget.online) {
+          _guessesUsed++;
+        }
+      } else {
       sounds.playWrong();
       // کارت خنثی فقط یک حدس استفاده می‌کند، نوبت عوض نمی‌شود
       if (widget.online) {
