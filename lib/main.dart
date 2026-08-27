@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -11,7 +14,17 @@ import 'words.dart';
 final SoundManager sounds = SoundManager();
 
 IO.Socket createSocket() {
-  return IO.io('http://10.0.2.2:3000', <String, dynamic>{
+  // انتخاب آدرس بر اساس پلتفرم
+  String serverUrl;
+  if (kIsWeb) {
+    // مرورگر: localhost
+    serverUrl = 'http://localhost:3000';
+  } else {
+    // موبایل: IP لپ‌تاپ
+    serverUrl = 'http://10.72.22.100:3000';
+  }
+
+  return IO.io(serverUrl, <String, dynamic>{
     'transports': ['websocket'],
     'autoConnect': true,
   });
@@ -1875,6 +1888,8 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   late Animation<double> _turnBannerPulseAnimation;
   double _shakeDx = 0;
   bool _showTurnChangeMessage = false;
+  bool _showTurnNotification = false;
+  String _turnNotificationText = '';
 
   @override
   void initState() {
@@ -2055,6 +2070,13 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     _hand++;
     _winner = null;
     _startNewGame();
+
+    // اعلان شروع دست جدید
+    _turnNotificationText = 'دست $_hand شروع شد';
+    _showTurnNotification = true;
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _showTurnNotification = false);
+    });
   }
 
   void _resetMatch() {
@@ -2248,8 +2270,14 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
 
   void _endTurn() {
     final oldTeam = _currentTeam;
+    final newTeam = _currentTeam == 'red' ? 'blue' : 'red';
+
+    // تنظیم پیام اعلان
+    _turnNotificationText = 'نوبت تیم ${_teamName(newTeam)}';
+    _showTurnNotification = true;
+
     setState(() {
-      _currentTeam = _currentTeam == 'red' ? 'blue' : 'red';
+      _currentTeam = newTeam;
       _clue = null;
       _clueNumber = 1;
       _guessesUsed = 0;
@@ -2264,6 +2292,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       if (mounted) {
         setState(() {
           _showTurnChangeMessage = false;
+          _showTurnNotification = false;
         });
         _pulseController.stop();
         _pulseController.reset();
@@ -2332,6 +2361,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
             _guessesUsed = 0;
             _turnStart = DateTime.now().millisecondsSinceEpoch;
           });
+          _sync(); // 👈 این اضافه شد
         }
       }
     } else if (color == 'neutral') {
@@ -2669,16 +2699,18 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
               style: const TextStyle(color: Colors.white, fontSize: 18),
             ),
             const SizedBox(height: 30),
-            if (!widget.online || widget.isHost)
+            if (isFinal)
               ElevatedButton(
-                onPressed: () => setState(() {
-                  if (isFinal) {
-                    _resetMatch();
-                  } else {
-                    _nextHand();
-                  }
-                }),
-                child: Text(isFinal ? '🔄 بازی دوباره از اول' : '▶️ دست بعد'),
+                onPressed: () async {
+                  await _setPortrait();
+                  if (mounted) Navigator.pop(context);
+                },
+                child: const Text('🏠 بازگشت به منو'),
+              )
+            else if (!widget.online || widget.isHost)
+              ElevatedButton(
+                onPressed: () => setState(() => _nextHand()),
+                child: const Text('▶️ دست بعد'),
               )
             else
               const Text(
@@ -2764,10 +2796,11 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                   color: Colors.white70,
                                   size: 20,
                                 ),
-                                onPressed: () {
+                                onPressed: () async {
                                   if (widget.online)
                                     widget.socket!.emit('leave');
-                                  Navigator.pop(context);
+                                  await _setPortrait();
+                                  if (mounted) Navigator.pop(context);
                                 },
                               ),
                               if (!widget.online)
@@ -3034,6 +3067,71 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                       style: TextStyle(
                         color: Colors.black,
                         fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // پیام اعلان تعویض نوبت
+            if (_showTurnNotification)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: _showTurnNotification ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.6),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 40,
+                            vertical: 24,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: _currentTeam == 'red'
+                                  ? [Colors.red, Colors.red.shade700]
+                                  : [Colors.blue, Colors.blue.shade700],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (_currentTeam == 'red'
+                                        ? Colors.red
+                                        : Colors.blue)
+                                    .withOpacity(0.7),
+                                blurRadius: 20,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.swap_horiz,
+                                color: Colors.white,
+                                size: 36,
+                              ),
+                              const SizedBox(width: 16),
+                              Text(
+                                _turnNotificationText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black45,
+                                      blurRadius: 8,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
