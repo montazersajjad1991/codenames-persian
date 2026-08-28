@@ -39,7 +39,7 @@ jobs:
         run: flutter clean
 
       - name: Build APK
-        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: Collect APKs
         run: |

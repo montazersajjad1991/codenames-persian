@@ -151,6 +151,66 @@ class SoundManager {
   }
 }
 
+class BannerButton extends StatelessWidget {
+  final String text;
+  final String banner;
+  final VoidCallback onTap;
+  final double height;
+  final double fontSize;
+
+  const BannerButton({
+    super.key,
+    required this.text,
+    required this.banner,
+    required this.onTap,
+    this.height = 52,
+    this.fontSize = 16,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              image: DecorationImage(
+                image: AssetImage(banner),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.black.withOpacity(0.35),
+              ),
+              child: Center(
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: const [
+                      Shadow(color: Colors.black87, blurRadius: 6),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class CodenamesApp extends StatelessWidget {
   const CodenamesApp({super.key});
 
@@ -375,8 +435,7 @@ class _MainMenuState extends State<MainMenu>
                       _buildMenuButton(
                         text: 'بازی آنلاین ۴ نفره',
                         subtitle: 'با دوستانت از راه دور بازی کن',
-                        icon: Icons.wifi,
-                        gradient: const [Color(0xFF1E88E5), Color(0xFF1565C0)],
+                        banner: 'assets/images/btn_menu_online.jpg',
                         delay: 200,
                         onTap: () {
                           Navigator.push(
@@ -390,8 +449,7 @@ class _MainMenuState extends State<MainMenu>
                       _buildMenuButton(
                         text: 'بازی دورهمی (آفلاین)',
                         subtitle: 'یک گوشی، چند نفر',
-                        icon: Icons.people,
-                        gradient: const [Color(0xFF43A047), Color(0xFF2E7D32)],
+                        banner: 'assets/images/btn_menu_offline.jpg',
                         delay: 350,
                         onTap: () => _askHandsOffline(context),
                       ),
@@ -399,8 +457,7 @@ class _MainMenuState extends State<MainMenu>
                       _buildMenuButton(
                         text: 'آموزش',
                         subtitle: 'قوانین و ترفندها',
-                        icon: Icons.school,
-                        gradient: const [Color(0xFFFB8C00), Color(0xFFEF6C00)],
+                        banner: 'assets/images/btn_menu_tutorial.jpg',
                         delay: 500,
                         onTap: () {
                           Navigator.push(
@@ -467,8 +524,7 @@ class _MainMenuState extends State<MainMenu>
   Widget _buildMenuButton({
     required String text,
     required String subtitle,
-    required IconData icon,
-    required List<Color> gradient,
+    required String banner,
     required VoidCallback onTap,
     int delay = 0,
   }) {
@@ -492,61 +548,58 @@ class _MainMenuState extends State<MainMenu>
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(16),
-            child: Ink(
+            child: Container(
+              height: 92,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: gradient,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
                 borderRadius: BorderRadius.circular(16),
+                image: DecorationImage(
+                  image: AssetImage(banner),
+                  fit: BoxFit.cover,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: gradient[0].withOpacity(0.4),
+                    color: Colors.black.withOpacity(0.5),
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),
                 ],
               ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Row(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withOpacity(0.30),
+                      Colors.black.withOpacity(0.45),
+                      Colors.black.withOpacity(0.30),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(icon, color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            text,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            subtitle,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withOpacity(0.8),
-                            ),
-                          ),
+                    Text(
+                      text,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(color: Colors.black87, blurRadius: 6),
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_back_ios,
-                        color: Colors.white70, size: 16),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.85),
+                        shadows: [
+                          Shadow(color: Colors.black87, blurRadius: 4),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1311,21 +1364,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     );
   }
 
-  Widget _sectionButton(String text, Color color, VoidCallback onTap) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-        child: Text(text,
-            style: const TextStyle(fontSize: 16, color: Colors.white)),
-      ),
-    );
+  Widget _sectionButton(String text, String banner, VoidCallback onTap) {
+    return BannerButton(text: text, banner: banner, onTap: onTap);
   }
 
   @override
@@ -1378,18 +1418,26 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                 const SizedBox(height: 16),
                 if (_roomCode == null) ...[
                   if (_mode == 'main') ...[
-                    _sectionButton('🏠 ساخت اتاق جدید', Colors.blue,
+                    _sectionButton(
+                        'ساخت اتاق جدید',
+                        'assets/images/btn_lobby_create.jpg',
                         () => setState(() => _mode = 'create')),
                     const SizedBox(height: 10),
-                    _sectionButton('🔑 پیوستن با کد اتاق', Colors.green,
+                    _sectionButton(
+                        'پیوستن با کد اتاق',
+                        'assets/images/btn_lobby_join.jpg',
                         () => setState(() => _mode = 'join')),
                     const SizedBox(height: 10),
-                    _sectionButton('📋 اتاق‌های عمومی', Colors.teal, () {
+                    _sectionButton(
+                        'اتاق‌های عمومی', 'assets/images/btn_lobby_list.jpg',
+                        () {
                       setState(() => _mode = 'list');
                       _fetchRooms();
                     }),
                     const SizedBox(height: 10),
-                    _sectionButton('👥 دوستان', Colors.purple,
+                    _sectionButton(
+                        'دوستان',
+                        'assets/images/btn_lobby_friends.jpg',
                         () => setState(() => _mode = 'friends')),
                   ],
                   if (_mode == 'create') ...[
@@ -1409,7 +1457,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                           style:
                               TextStyle(color: Colors.white54, fontSize: 12)),
                     const SizedBox(height: 8),
-                    _sectionButton('✅ ساخت اتاق', Colors.blue, _createRoom),
+                    _sectionButton('ساخت اتاق',
+                        'assets/images/btn_lobby_create.jpg', _createRoom),
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: () => setState(() => _mode = 'main'),
@@ -1702,31 +1751,27 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        ElevatedButton(
-                          onPressed:
-                              _players.length == 4 ? _shuffleTeams : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.purple,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
+                        Expanded(
+                          child: BannerButton(
+                            text: 'تیم‌بندی رندوم',
+                            banner: 'assets/images/btn_lobby_shuffle.jpg',
+                            height: 56,
+                            fontSize: 14,
+                            onTap: _players.length == 4 ? _shuffleTeams : () {},
                           ),
-                          child: const Text('🔀 تیم‌بندی رندوم',
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 14)),
                         ),
                         const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: allAssigned
-                              ? () => _askHands(() => _start())
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 30, vertical: 14),
+                        Expanded(
+                          flex: 2,
+                          child: BannerButton(
+                            text: 'شروع بازی',
+                            banner: 'assets/images/btn_lobby_start.jpg',
+                            height: 56,
+                            fontSize: 17,
+                            onTap: allAssigned
+                                ? () => _askHands(() => _start())
+                                : () {},
                           ),
-                          child: const Text('🚀 شروع بازی',
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 17)),
                         ),
                       ],
                     ),
@@ -3085,17 +3130,29 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 30),
             if (isFinal)
-              ElevatedButton(
-                onPressed: () async {
-                  await _setPortrait();
-                  if (mounted) Navigator.pop(context);
-                },
-                child: const Text('🏠 بازگشت به منو'),
+              SizedBox(
+                width: 260,
+                child: BannerButton(
+                  text: 'بازگشت به منو',
+                  banner: 'assets/images/btn_game_menu.jpg',
+                  height: 56,
+                  fontSize: 16,
+                  onTap: () async {
+                    await _setPortrait();
+                    if (mounted) Navigator.pop(context);
+                  },
+                ),
               )
             else if (!widget.online || _isHost)
-              ElevatedButton(
-                onPressed: () => setState(() => _nextHand()),
-                child: const Text('▶️ دست بعد'),
+              SizedBox(
+                width: 260,
+                child: BannerButton(
+                  text: 'دست بعد',
+                  banner: 'assets/images/btn_game_nexthand.jpg',
+                  height: 56,
+                  fontSize: 16,
+                  onTap: () => setState(() => _nextHand()),
+                ),
               )
             else
               const Text(
@@ -3392,21 +3449,12 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                   setState(() => _selectedNumber = v ?? 1),
                             ),
                             const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _trySubmitClue,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                  ),
-                                ),
-                                child: const Text(
-                                  'ثبت',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ),
+                            BannerButton(
+                              text: 'ثبت سرنخ',
+                              banner: 'assets/images/btn_game_clue.jpg',
+                              height: 48,
+                              fontSize: 14,
+                              onTap: _trySubmitClue,
                             ),
                           ] else if (_winner == null) ...[
                             // پیام "نوبت عوض شد" که محو می‌شود
@@ -3436,24 +3484,12 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 scale: _showTurnChangeMessage
                                     ? _pulseAnimation
                                     : const AlwaysStoppedAnimation(1.0),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _endTurn,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orange,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                      elevation: _showTurnChangeMessage ? 8 : 2,
-                                    ),
-                                    child: const Text(
-                                      '🔚 پایان نوبت',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
+                                child: BannerButton(
+                                  text: 'پایان نوبت',
+                                  banner: 'assets/images/btn_game_endturn.jpg',
+                                  height: 52,
+                                  fontSize: 15,
+                                  onTap: _endTurn,
                                 ),
                               ),
                           ],
