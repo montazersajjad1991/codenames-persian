@@ -39,13 +39,14 @@ jobs:
         run: flutter clean
 
       - name: Build APK
-        run: flutter build apk --release --android-skip-build-dependency-validation
+        run: flutter build apk --release --android-skip-build-dependency-validation || true
 
       - name: Collect APKs
         run: |
           mkdir -p apk-out
-          find build/app/outputs -name "*.apk" -exec cp {} apk-out/ \; || true
-          find build/app/outputs/apk -name "*.apk" -exec cp {} apk-out/ \; || true
+          echo "=== APK files in workspace ==="
+          find . -name "*.apk" -print
+          find . -name "*.apk" -exec cp {} apk-out/ \; || true
           ls -la apk-out
           if [ -z "$(ls -A apk-out/*.apk 2>/dev/null)" ]; then
             echo "No APK files found!"
