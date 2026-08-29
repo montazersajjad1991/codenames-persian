@@ -103,6 +103,7 @@ class SoundManager {
   final AudioPlayer _music = AudioPlayer();
   bool _isMuted = false;
   bool _themeStarted = false;
+  bool _inGame = false;
 
   bool get isMuted => _isMuted;
 
@@ -111,11 +112,23 @@ class SoundManager {
     if (_isMuted) {
       _music.pause();
     } else {
-      if (_themeStarted) {
+      if (!_inGame && _themeStarted) {
         _music.resume().catchError((_) {});
-      } else {
-        startTheme();
       }
+    }
+  }
+
+  /// ورود به بازی: موزیک پس‌زمینه قطع می‌شه
+  void enterGame() {
+    _inGame = true;
+    _music.pause();
+  }
+
+  /// خروج از بازی: موزیک پس‌زمینه برمی‌گرده
+  void exitGame() {
+    _inGame = false;
+    if (!_isMuted && _themeStarted) {
+      _music.resume().catchError((_) {});
     }
   }
 
@@ -124,10 +137,9 @@ class SoundManager {
     try {
       _player.play(AssetSource('audio/$file')).catchError((_) {});
 
-      // ترفند جلوگیری از قطع موزیک پس‌زمینه در اندروید/وب
-      // بلافاصله بعد از پخش افکت، دستور ادامه پخش موزیک ارسال می‌شود
+      // ترفند ادامه موزیک پس‌زمینه بعد از افکت (فقط خارج از بازی)
       Future.delayed(const Duration(milliseconds: 100), () {
-        if (!_isMuted && _themeStarted) {
+        if (!_isMuted && _themeStarted && !_inGame) {
           _music.resume().catchError((_) {});
         }
       });
@@ -142,11 +154,13 @@ class SoundManager {
 
   void startTheme() {
     if (_isMuted || _themeStarted) return;
-    _themeStarted = true;
     try {
       _music.setReleaseMode(ReleaseMode.loop);
       _music.setVolume(0.35);
-      _music.play(AssetSource('audio/theme.mp3')).catchError((_) {});
+      _music
+          .play(AssetSource('audio/theme.mp3'))
+          .then((_) => _themeStarted = true)
+          .catchError((_) {});
     } catch (_) {}
   }
 }
@@ -402,6 +416,32 @@ class _MainMenuState extends State<MainMenu>
                 ),
               ),
             ),
+            // دکمه میوت بالای منو (همگام با میوت داخل بازی)
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => setState(() => sounds.toggleMute()),
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Icon(
+                      sounds.isMuted ? Icons.volume_off : Icons.volume_up,
+                      color: const Color(0xFFE8B33C),
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
             // محتوا
             SafeArea(
               child: Center(
@@ -545,7 +585,10 @@ class _MainMenuState extends State<MainMenu>
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: onTap,
+              onTap: () {
+                sounds.startTheme();
+                onTap();
+              },
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 decoration: BoxDecoration(
@@ -2100,7 +2143,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     super.initState();
     _setLandscape(); // وقتی وارد بازی می‌شویم، حالت افقی فعال شود
     _maxHands = widget.maxHands;
-    sounds.startTheme();
+    sounds.enterGame();
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -2206,6 +2249,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     _clueController.dispose();
     if (widget.online && !_aborted) widget.socket!.emit('leave');
     _setPortrait(); // وقتی از بازی خارج می‌شویم، دوباره عمودی شود
+    sounds.exitGame();
     super.dispose();
   }
 
@@ -2244,7 +2288,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       for (int i = 0; i < 25; i++) {
         if (newRevealed[i] && !_revealed[i]) {
           newIdx = i;
-          sounds.playFlip();
         }
       }
       _revealed
@@ -2564,7 +2607,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     // نمایش پیام "نوبت عوض شد" و تپش دکمه
     _showTurnChangeMessage = true;
     _pulseController.repeat(reverse: true);
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
         setState(() {
           _showTurnChangeMessage = false;
@@ -2681,7 +2724,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
     _showTurnChangeMessage = true;
     _pulseController.repeat(reverse: true);
 
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 4), () {
       if (mounted) {
         setState(() {
           _showTurnChangeMessage = false;
