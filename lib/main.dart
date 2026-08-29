@@ -3259,12 +3259,19 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
               top: 4,
               left: 4,
               child: Container(
-                width: 10,
-                height: 10,
+                width: 14,
+                height: 14,
                 decoration: BoxDecoration(
                   color: spyColor,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1),
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.4),
+                      blurRadius: 2,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -3719,7 +3726,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 ),
                                 borderRadius: BorderRadius.circular(8),
                                 border:
-                                    Border.all(color: Colors.white38, width: 1),
+                                    Border.all(color: Colors.white38, width: 2),
                               ),
                               child: Column(
                                 children: [
