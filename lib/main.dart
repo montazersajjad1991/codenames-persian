@@ -3930,14 +3930,15 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 ),
                               ),
                             // دکمه پایان نوبت فقط برای بازیکن فعال
-                           if (!widget.online || _isMyTurn())
-  BannerButton(
-    text: 'پایان نوبت',
-    banner: 'assets/images/btn_game_endturn.jpg',
-    fontSize: 15,
-    aspectRatio: 2.85,
-    onTap: _endTurn,
-  ),
+                            if (!widget.online || _isMyTurn())
+                              BannerButton(
+                                text: 'پایان نوبت',
+                                banner: 'assets/images/btn_game_endturn.jpg',
+                                fontSize: 15,
+                                aspectRatio: 2.85,
+                                onTap: _endTurn,
+                              ),
+                          ],
                           const SizedBox(height: 10),
                           if (widget.online && _winner == null) ...[
                             // وضعیت بازیکن فعال
