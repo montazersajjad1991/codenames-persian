@@ -193,7 +193,6 @@ class SoundManager {
     } catch (_) {}
   }
 
-  void playFlip() => _playEffect('flip.mp3');
   void playCorrect() => _playEffect('correct.mp3');
   void playWrong() => _playEffect('wrong.mp3');
   void playWin() => _playEffect('win.mp3');
@@ -2397,7 +2396,6 @@ class _FlipCardState extends State<FlipCard>
   void didUpdateWidget(FlipCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.revealed && !oldWidget.revealed) {
-      sounds.playFlip();
       _controller.forward(from: 0);
     }
     if (!widget.revealed && oldWidget.revealed) {
@@ -3826,9 +3824,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                           if (_showTurnNotification)
                             Container(
                               width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 8),
+                              margin: const EdgeInsets.only(bottom: 6),
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 8, horizontal: 6),
+                                  vertical: 5, horizontal: 6),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: _currentTeam == 'red'
@@ -3842,9 +3840,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  height: 1.4,
+                                  height: 1.3,
                                 ),
                               ),
                             ),
