@@ -435,7 +435,6 @@ class _MainMenuState extends State<MainMenu>
                       _buildMenuButton(
                         text: 'بازی آنلاین ۴ نفره',
                         subtitle: 'با دوستانت از راه دور بازی کن',
-                        banner: 'assets/images/btn_menu_online.jpg',
                         delay: 200,
                         onTap: () {
                           Navigator.push(
@@ -449,7 +448,6 @@ class _MainMenuState extends State<MainMenu>
                       _buildMenuButton(
                         text: 'بازی دورهمی (آفلاین)',
                         subtitle: 'یک گوشی، چند نفر',
-                        banner: 'assets/images/btn_menu_offline.jpg',
                         delay: 350,
                         onTap: () => _askHandsOffline(context),
                       ),
@@ -457,7 +455,6 @@ class _MainMenuState extends State<MainMenu>
                       _buildMenuButton(
                         text: 'آموزش',
                         subtitle: 'قوانین و ترفندها',
-                        banner: 'assets/images/btn_menu_tutorial.jpg',
                         delay: 500,
                         onTap: () {
                           Navigator.push(
@@ -524,7 +521,6 @@ class _MainMenuState extends State<MainMenu>
   Widget _buildMenuButton({
     required String text,
     required String subtitle,
-    required String banner,
     required VoidCallback onTap,
     int delay = 0,
   }) {
@@ -543,8 +539,9 @@ class _MainMenuState extends State<MainMenu>
       },
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
-        child: AspectRatio(
-          aspectRatio: 2,
+        child: SizedBox(
+          width: double.infinity,
+          height: 96,
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -552,10 +549,11 @@ class _MainMenuState extends State<MainMenu>
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
                   borderRadius: BorderRadius.circular(16),
-                  image: DecorationImage(
-                    image: AssetImage(banner),
-                    fit: BoxFit.cover,
+                  border: Border.all(
+                    color: const Color(0xFFE8B33C).withOpacity(0.55),
+                    width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -565,49 +563,29 @@ class _MainMenuState extends State<MainMenu>
                     ),
                   ],
                 ),
-                child: Center(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.78),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFFE8B33C).withOpacity(0.55),
-                        width: 1.5,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      text,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(color: Colors.black87, blurRadius: 6),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          text,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(color: Colors.black87, blurRadius: 6),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          subtitle,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white.withOpacity(0.85),
-                            shadows: [
-                              Shadow(color: Colors.black87, blurRadius: 4),
-                            ],
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.85),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -1917,7 +1895,7 @@ class _ZoomOverlayState extends State<_ZoomOverlay>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final w = size.width * 0.75;
+    final w = size.width * 0.55;
     final h = w * 2 / 3;
     return Center(
       child: ScaleTransition(
@@ -3399,6 +3377,32 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                             ],
                           ),
                           const Spacer(),
+                          // اعلان تعویض نوبت داخل پنل
+                          if (_showTurnNotification)
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: _currentTeam == 'red'
+                                      ? [Colors.red, Colors.red.shade700]
+                                      : [Colors.blue, Colors.blue.shade700],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _turnNotificationText,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
                           // فرم سرنخ یا دکمه پایان نوبت
                           if (_showClueUI()) ...[
                             TextField(
@@ -3554,86 +3558,27 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-            // پیام اعلان تعویض نوبت
-            if (_showTurnNotification)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedOpacity(
-                    opacity: _showTurnNotification ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: Container(
-                      color: Colors.black.withOpacity(0.6),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 40,
-                            vertical: 24,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: _currentTeam == 'red'
-                                  ? [Colors.red, Colors.red.shade700]
-                                  : [Colors.blue, Colors.blue.shade700],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (_currentTeam == 'red'
-                                        ? Colors.red
-                                        : Colors.blue)
-                                    .withOpacity(0.7),
-                                blurRadius: 20,
-                                spreadRadius: 4,
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.swap_horiz,
-                                color: Colors.white,
-                                size: 36,
-                              ),
-                              const SizedBox(width: 16),
-                              Text(
-                                _turnNotificationText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black45,
-                                      blurRadius: 8,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             if (_zoomImg != null)
-              _ZoomOverlay(
-                img: _zoomImg!,
-                word: _zoomWord,
-                strip: _zoomStrip,
-                onDone: () {
-                  setState(() {
-                    _zoomImg = null;
-                    if (_pendingWinner != null) {
-                      _setWinner(_pendingWinner!);
-                      _pendingWinner = null;
-                      _shakeController.forward(from: 0);
-                    }
-                  });
-                },
+              Positioned(
+                top: 0,
+                bottom: 0,
+                right: 0,
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: _ZoomOverlay(
+                  img: _zoomImg!,
+                  word: _zoomWord,
+                  strip: _zoomStrip,
+                  onDone: () {
+                    setState(() {
+                      _zoomImg = null;
+                      if (_pendingWinner != null) {
+                        _setWinner(_pendingWinner!);
+                        _pendingWinner = null;
+                        _shakeController.forward(from: 0);
+                      }
+                    });
+                  },
+                ),
               ),
             if (_showStartInfo && _ready && widget.online) _startInfoOverlay(),
             if (_winner != null) _winnerOverlay(),
