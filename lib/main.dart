@@ -170,6 +170,7 @@ class BannerButton extends StatelessWidget {
   final String banner;
   final VoidCallback onTap;
   final double fontSize;
+  final bool enabled;
 
   const BannerButton({
     super.key,
@@ -177,6 +178,7 @@ class BannerButton extends StatelessWidget {
     required this.banner,
     required this.onTap,
     this.fontSize = 16,
+    this.enabled = true,
   });
 
   @override
@@ -185,34 +187,37 @@ class BannerButton extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 560),
       child: AspectRatio(
         aspectRatio: 2,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                image: DecorationImage(
-                  image: AssetImage(banner),
-                  fit: BoxFit.cover,
-                ),
-              ),
+        child: Opacity(
+          opacity: enabled ? 1 : 0.4,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: enabled ? onTap : null,
+              borderRadius: BorderRadius.circular(14),
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  color: Colors.black.withOpacity(0.30),
+                  image: DecorationImage(
+                    image: AssetImage(banner),
+                    fit: BoxFit.cover,
+                  ),
                 ),
-                child: Center(
-                  child: Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: fontSize,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      shadows: const [
-                        Shadow(color: Colors.black87, blurRadius: 6),
-                      ],
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: Colors.black.withOpacity(0.30),
+                  ),
+                  child: Center(
+                    child: Text(
+                      text,
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: const [
+                          Shadow(color: Colors.black87, blurRadius: 6),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1775,22 +1780,25 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Column(
+                    Row(
                       children: [
-                        BannerButton(
-                          text: 'تیم‌بندی رندوم',
-                          banner: 'assets/images/btn_lobby_shuffle.jpg',
-                          fontSize: 14,
-                          onTap: _players.length == 4 ? _shuffleTeams : () {},
+                        Expanded(
+                          child: BannerButton(
+                            text: 'تیم‌بندی رندوم',
+                            banner: 'assets/images/btn_lobby_shuffle.jpg',
+                            fontSize: 12,
+                            onTap: _shuffleTeams,
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                        BannerButton(
-                          text: 'شروع بازی',
-                          banner: 'assets/images/btn_lobby_start.jpg',
-                          fontSize: 17,
-                          onTap: allAssigned
-                              ? () => _askHands(() => _start())
-                              : () {},
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: BannerButton(
+                            text: 'شروع بازی',
+                            banner: 'assets/images/btn_lobby_start.jpg',
+                            fontSize: 13,
+                            enabled: allAssigned,
+                            onTap: () => _askHands(() => _start()),
+                          ),
                         ),
                       ],
                     ),
