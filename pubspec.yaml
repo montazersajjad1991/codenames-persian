@@ -22,3 +22,7 @@ flutter:
   assets:
     - assets/images/
     - assets/audio/
+  fonts:
+    - family: BNazanin
+      fonts:
+        - asset: assets/fonts/BNazanin.ttf

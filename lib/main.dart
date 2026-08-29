@@ -3223,20 +3223,29 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                 height: 1,
                 color: const Color(0xFFB9A77F).withOpacity(0.6),
               ),
-              // نیمه پایین: کلمه عادی (برای خود بازیکن)
+              // نیمه پایین: کلمه روی زمینه سفید
               Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        word,
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 24,
-                          letterSpacing: 1.2,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(6),
+                      bottomRight: Radius.circular(6),
+                    ),
+                  ),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          word,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ),
                     ),
@@ -3326,8 +3335,8 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
 
   Widget _resultChip(Color color, int count) {
     return Container(
-      width: 40,
-      height: 40,
+      width: 32,
+      height: 32,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
@@ -3345,7 +3354,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 18,
+            fontSize: 14,
           ),
         ),
       ),
@@ -3701,7 +3710,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                             // بنر هویت: رنگ تیم + نقش
                             Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 5),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: widget.myTeam == 'red'
@@ -3719,7 +3728,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 15,
+                                      fontSize: 13,
                                     ),
                                   ),
                                   Text(
@@ -3727,7 +3736,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                         ? '🕵️ سرنخ‌ده'
                                         : '🤔 حدس‌زننده',
                                     style: const TextStyle(
-                                        color: Colors.white, fontSize: 12),
+                                        color: Colors.white, fontSize: 10),
                                   ),
                                 ],
                               ),
@@ -3740,7 +3749,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                             scale: _turnBannerPulseAnimation,
                             child: Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: _currentTeam == 'red'
@@ -3767,7 +3776,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   shadows: [
                                     Shadow(
                                         color: Colors.black45,
@@ -3784,7 +3793,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                             'دست $_hand از $_maxHands',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 14,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -3824,9 +3833,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                           if (_showTurnNotification)
                             Container(
                               width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 6),
+                              margin: const EdgeInsets.only(bottom: 4),
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 5, horizontal: 6),
+                                  vertical: 4, horizontal: 6),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: _currentTeam == 'red'
@@ -3840,9 +3849,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  height: 1.3,
+                                  height: 1.2,
                                 ),
                               ),
                             ),
@@ -3921,21 +3930,21 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 ),
                               ),
                             // دکمه پایان نوبت فقط برای بازیکن فعال
-                            if (!widget.online || _isMyTurn())
-                              BannerButton(
-                                text: 'پایان نوبت',
-                                banner: 'assets/images/btn_game_endturn.jpg',
-                                fontSize: 15,
-                                onTap: _endTurn,
-                              ),
-                          ],
+                           if (!widget.online || _isMyTurn())
+  BannerButton(
+    text: 'پایان نوبت',
+    banner: 'assets/images/btn_game_endturn.jpg',
+    fontSize: 15,
+    aspectRatio: 2.85,
+    onTap: _endTurn,
+  ),
                           const SizedBox(height: 10),
                           if (widget.online && _winner == null) ...[
                             // وضعیت بازیکن فعال
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 10, horizontal: 6),
+                                  vertical: 6, horizontal: 6),
                               decoration: BoxDecoration(
                                 color: (_currentTeam == 'red'
                                         ? Colors.red
@@ -3965,7 +3974,7 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                               '⏱ $_remainingSec',
                               style: const TextStyle(
                                 color: Colors.white70,
-                                fontSize: 18,
+                                fontSize: 14,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
