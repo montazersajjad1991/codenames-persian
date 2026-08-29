@@ -155,7 +155,6 @@ class BannerButton extends StatelessWidget {
   final String text;
   final String banner;
   final VoidCallback onTap;
-  final double height;
   final double fontSize;
 
   const BannerButton({
@@ -163,43 +162,44 @@ class BannerButton extends StatelessWidget {
     required this.text,
     required this.banner,
     required this.onTap,
-    this.height = 52,
     this.fontSize = 16,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: height,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: AssetImage(banner),
-                fit: BoxFit.cover,
-              ),
-            ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: AspectRatio(
+        aspectRatio: 2,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.black.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(14),
+                image: DecorationImage(
+                  image: AssetImage(banner),
+                  fit: BoxFit.cover,
+                ),
               ),
-              child: Center(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    shadows: const [
-                      Shadow(color: Colors.black87, blurRadius: 6),
-                    ],
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.black.withOpacity(0.30),
+                ),
+                child: Center(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: fontSize,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      shadows: const [
+                        Shadow(color: Colors.black87, blurRadius: 6),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -542,9 +542,9 @@ class _MainMenuState extends State<MainMenu>
         );
       },
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
+        constraints: const BoxConstraints(maxWidth: 560),
         child: AspectRatio(
-          aspectRatio: 4,
+          aspectRatio: 2,
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -1316,7 +1316,6 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       builder: (context, candidate, rejected) {
         return Container(
           width: 160,
-          height: 56,
           margin: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: color.withOpacity(0.25),
@@ -1750,30 +1749,22 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Column(
                       children: [
-                        Expanded(
-                          child: BannerButton(
-                            text: 'تیم‌بندی رندوم',
-                            banner: 'assets/images/btn_lobby_shuffle.jpg',
-                            height: 56,
-                            fontSize: 14,
-                            onTap: _players.length == 4 ? _shuffleTeams : () {},
-                          ),
+                        BannerButton(
+                          text: 'تیم‌بندی رندوم',
+                          banner: 'assets/images/btn_lobby_shuffle.jpg',
+                          fontSize: 14,
+                          onTap: _players.length == 4 ? _shuffleTeams : () {},
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: BannerButton(
-                            text: 'شروع بازی',
-                            banner: 'assets/images/btn_lobby_start.jpg',
-                            height: 56,
-                            fontSize: 17,
-                            onTap: allAssigned
-                                ? () => _askHands(() => _start())
-                                : () {},
-                          ),
+                        const SizedBox(height: 10),
+                        BannerButton(
+                          text: 'شروع بازی',
+                          banner: 'assets/images/btn_lobby_start.jpg',
+                          fontSize: 17,
+                          onTap: allAssigned
+                              ? () => _askHands(() => _start())
+                              : () {},
                         ),
                       ],
                     ),
@@ -3137,7 +3128,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                 child: BannerButton(
                   text: 'بازگشت به منو',
                   banner: 'assets/images/btn_game_menu.jpg',
-                  height: 56,
                   fontSize: 16,
                   onTap: () async {
                     await _setPortrait();
@@ -3151,7 +3141,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                 child: BannerButton(
                   text: 'دست بعد',
                   banner: 'assets/images/btn_game_nexthand.jpg',
-                  height: 56,
                   fontSize: 16,
                   onTap: () => setState(() => _nextHand()),
                 ),
@@ -3454,7 +3443,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                             BannerButton(
                               text: 'ثبت سرنخ',
                               banner: 'assets/images/btn_game_clue.jpg',
-                              height: 48,
                               fontSize: 14,
                               onTap: _trySubmitClue,
                             ),
@@ -3489,7 +3477,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                 child: BannerButton(
                                   text: 'پایان نوبت',
                                   banner: 'assets/images/btn_game_endturn.jpg',
-                                  height: 52,
                                   fontSize: 15,
                                   onTap: _endTurn,
                                 ),
