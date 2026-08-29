@@ -42,6 +42,21 @@ class UserProfile {
 
 final SoundManager sounds = SoundManager();
 
+/// نمایش زمان گذشته از یه timestamp به فارسی
+String formatLastSeen(int? ts) {
+  if (ts == null || ts == 0) return 'مدت‌ها پیش';
+  final diff = DateTime.now().millisecondsSinceEpoch - ts;
+  final sec = diff ~/ 1000;
+  if (sec < 60) return 'همین الان';
+  final min = sec ~/ 60;
+  if (min < 60) return '$min دقیقه پیش';
+  final hr = min ~/ 60;
+  if (hr < 24) return '$hr ساعت پیش';
+  final day = hr ~/ 24;
+  if (day < 7) return '$day روز پیش';
+  return 'مدت‌ها پیش';
+}
+
 IO.Socket createSocket() {
   // انتخاب آدرس بر اساس پلتفرم
   String serverUrl;
@@ -100,6 +115,7 @@ void main() async {
 // ---------------- مدیریت صدا ----------------
 class SoundManager {
   final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _flipPlayer = AudioPlayer();
   final AudioPlayer _music = AudioPlayer();
   bool _isMuted = false;
   bool _themeStarted = false;
@@ -132,21 +148,30 @@ class SoundManager {
     }
   }
 
+  void _afterEffect() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!_isMuted && _themeStarted && !_inGame) {
+        _music.resume().catchError((_) {});
+      }
+    });
+  }
+
   void _play(String file) {
     if (_isMuted) return;
     try {
       _player.play(AssetSource('audio/$file')).catchError((_) {});
-
-      // ترفند ادامه موزیک پس‌زمینه بعد از افکت (فقط خارج از بازی)
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (!_isMuted && _themeStarted && !_inGame) {
-          _music.resume().catchError((_) {});
-        }
-      });
+      _afterEffect();
     } catch (_) {}
   }
 
-  void playFlip() => _play('flip.mp3');
+  void playFlip() {
+    if (_isMuted) return;
+    try {
+      _flipPlayer.play(AssetSource('audio/flip.mp3')).catchError((_) {});
+      _afterEffect();
+    } catch (_) {}
+  }
+
   void playCorrect() => _play('correct.mp3');
   void playWrong() => _play('wrong.mp3');
   void playWin() => _play('win.mp3');
@@ -171,6 +196,7 @@ class BannerButton extends StatelessWidget {
   final VoidCallback onTap;
   final double fontSize;
   final bool enabled;
+  final double aspectRatio;
 
   const BannerButton({
     super.key,
@@ -179,6 +205,7 @@ class BannerButton extends StatelessWidget {
     required this.onTap,
     this.fontSize = 16,
     this.enabled = true,
+    this.aspectRatio = 2,
   });
 
   @override
@@ -186,7 +213,7 @@ class BannerButton extends StatelessWidget {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 560),
       child: AspectRatio(
-        aspectRatio: 2,
+        aspectRatio: aspectRatio,
         child: Opacity(
           opacity: enabled ? 1 : 0.4,
           child: Material(
@@ -221,6 +248,53 @@ class BannerButton extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PlaqueButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onTap;
+  final double fontSize;
+
+  const PlaqueButton({
+    super.key,
+    required this.text,
+    required this.onTap,
+    this.fontSize = 17,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFFE8B33C).withOpacity(0.55),
+              width: 1.5,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                shadows: const [
+                  Shadow(color: Colors.black87, blurRadius: 6),
+                ],
               ),
             ),
           ),
@@ -1033,7 +1107,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
   String? _roomCode;
   bool _isHost = false;
   bool _navigated = false;
-  String _status = 'در حال اتصال به سرور...';
+  String _status = 'در حال اتصال...';
   final TextEditingController _joinController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   bool _isPublic = true;
@@ -1042,6 +1116,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
   List<Map<String, dynamic>> _publicRooms = [];
   List<Map<String, dynamic>> _players = [];
   List<Map<String, dynamic>> _friends = [];
+  List<Map<String, dynamic>> _pendingRequests = [];
   List<Map<String, dynamic>> _searchResults = [];
   List<Map<String, dynamic>> _recentPlayers = [];
 
@@ -1057,13 +1132,14 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     super.initState();
     _socket = createSocket();
     _socket.onConnect((_) {
-      setState(() => _status = 'متصل به سرور ✅');
+      setState(() => _status = '✅ متصل شدی');
       // ثبت یوزر ثابت روی سرور
       _socket.emit(
           'register', {'userId': UserProfile.id, 'name': UserProfile.name});
     });
     _socket.onConnectError(
-      (_) => setState(() => _status = '❌ خطا در اتصال! سرور روشنه؟'),
+      (_) =>
+          setState(() => _status = '⏳ اتصال برقرار نشد؛ در حال تلاش دوباره...'),
     );
     _socket.on('players', (list) {
       setState(() {
@@ -1084,6 +1160,124 @@ class _OnlineLobbyState extends State<OnlineLobby> {
         _friends =
             (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
       });
+    });
+    _socket.on('pending_requests', (list) {
+      setState(() {
+        _pendingRequests =
+            (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      });
+    });
+    _socket.on('friend_request', (data) {
+      // popup درخواست دوستی
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              backgroundColor: const Color(0xFF252538),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.person_add, color: Color(0xFFE8B33C)),
+                  const SizedBox(width: 8),
+                  const Text('درخواست دوستی',
+                      style: TextStyle(color: Colors.white)),
+                ],
+              ),
+              content: Text(
+                '${data['name']} می‌خواد دوست تو بشه',
+                style: const TextStyle(color: Colors.white70, fontSize: 15),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _socket.emit('respond_friend', {
+                      'from': data['from'],
+                      'accept': false,
+                    });
+                  },
+                  child: const Text('رد', style: TextStyle(color: Colors.red)),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _socket.emit('respond_friend', {
+                      'from': data['from'],
+                      'accept': true,
+                    });
+                  },
+                  child: const Text('تایید',
+                      style: TextStyle(color: Colors.green)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    });
+    _socket.on('friend_accepted', (data) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 ${data['name']} دوستیت رو قبول کرد!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    });
+    _socket.on('room_invite', (data) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              backgroundColor: const Color(0xFF252538),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.mail, color: Color(0xFFE8B33C)),
+                  const SizedBox(width: 8),
+                  const Text('دعوت به اتاق',
+                      style: TextStyle(color: Colors.white)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${data['fromName']} دعوتت کرده به اتاق ${data['code']}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 15),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('الان می‌پیوندی؟',
+                      style: TextStyle(color: Colors.white60, fontSize: 13)),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('بعداً',
+                      style: TextStyle(color: Colors.white60)),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _joinRoom('${data['code']}');
+                  },
+                  child: const Text('پیوستن',
+                      style: TextStyle(color: Colors.green)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     });
     _socket.on('recent_players', (list) {
       setState(() {
@@ -1363,11 +1557,22 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     );
   }
 
-  Widget _userRow(String id, String name, bool isOnline,
-      {VoidCallback? onAdd, VoidCallback? onRemove}) {
+  Widget _userRow(
+    String id,
+    String name,
+    bool isOnline, {
+    VoidCallback? onAdd,
+    VoidCallback? onRemove,
+    VoidCallback? onInvite,
+    int? lastSeen,
+    int games = 0,
+    String statusText = '',
+    bool pendingSent = false,
+    bool isFriend = false,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
           color: Colors.white10, borderRadius: BorderRadius.circular(10)),
       child: Row(
@@ -1377,10 +1582,42 @@ class _OnlineLobbyState extends State<OnlineLobby> {
               backgroundColor: isOnline ? Colors.green : Colors.grey),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(name,
-                style: const TextStyle(color: Colors.white, fontSize: 13)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500)),
+                Text(
+                  isOnline
+                      ? 'آنلاین'
+                      : (games > 0
+                          ? '$games بازی · ${formatLastSeen(lastSeen)}'
+                          : formatLastSeen(lastSeen)),
+                  style: const TextStyle(color: Colors.white54, fontSize: 10.5),
+                ),
+              ],
+            ),
           ),
-          if (onAdd != null)
+          if (onInvite != null && isOnline)
+            IconButton(
+              tooltip: 'دعوت به اتاق',
+              icon: const Icon(Icons.mail_outline,
+                  color: Color(0xFFE8B33C), size: 20),
+              onPressed: onInvite,
+            ),
+          if (pendingSent)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Text('در انتظار',
+                  style: TextStyle(color: Colors.orange, fontSize: 10)),
+            ),
+          if (onAdd != null && !isFriend && !pendingSent)
             IconButton(
               icon: const Icon(Icons.person_add, color: Colors.teal, size: 20),
               onPressed: onAdd,
@@ -1397,7 +1634,13 @@ class _OnlineLobbyState extends State<OnlineLobby> {
   }
 
   Widget _sectionButton(String text, String banner, VoidCallback onTap) {
-    return BannerButton(text: text, banner: banner, onTap: onTap);
+    return BannerButton(
+      text: text,
+      banner: banner,
+      fontSize: 18,
+      aspectRatio: 4,
+      onTap: onTap,
+    );
   }
 
   @override
@@ -1657,13 +1900,96 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                           '${u['id']}',
                           '${u['name']}',
                           u['online'] == true,
-                          onAdd: _isFriend('${u['id']}')
+                          lastSeen:
+                              u['lastSeen'] is int ? u['lastSeen'] as int : 0,
+                          isFriend: u['isFriend'] == true,
+                          pendingSent: u['pendingSent'] == true,
+                          onAdd: (u['isFriend'] == true ||
+                                  u['pendingSent'] == true)
                               ? null
                               : () => _socket
                                   .emit('add_friend', {'friendId': u['id']}),
                         ),
                       ),
                       const SizedBox(height: 10),
+                    ],
+                    // درخواست‌های در انتظار
+                    if (_pendingRequests.isNotEmpty) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8B33C).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: const Color(0xFFE8B33C).withOpacity(0.4)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('📬 درخواست‌های دوستی:',
+                                style: TextStyle(
+                                    color: Color(0xFFE8B33C),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                            const SizedBox(height: 6),
+                            ..._pendingRequests.map(
+                              (r) => Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white10,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                        radius: 5,
+                                        backgroundColor: r['online'] == true
+                                            ? Colors.green
+                                            : Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text('${r['name']}',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13)),
+                                    ),
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
+                                          backgroundColor: Colors.green),
+                                      onPressed: () => _socket.emit(
+                                          'respond_friend',
+                                          {'from': r['from'], 'accept': true}),
+                                      child: const Text('تایید',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12)),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
+                                          backgroundColor: Colors.red),
+                                      onPressed: () => _socket.emit(
+                                          'respond_friend',
+                                          {'from': r['from'], 'accept': false}),
+                                      child: const Text('رد',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                     const Text('❤️ دوستان من:',
                         style: TextStyle(color: Colors.white70, fontSize: 13)),
@@ -1673,9 +1999,19 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                               TextStyle(color: Colors.white38, fontSize: 12)),
                     ..._friends.map(
                       (f) => _userRow(
-                          '${f['id']}', '${f['name']}', f['online'] == true,
-                          onRemove: () => _socket
-                              .emit('remove_friend', {'friendId': f['id']})),
+                        '${f['id']}',
+                        '${f['name']}',
+                        f['online'] == true,
+                        lastSeen:
+                            f['lastSeen'] is int ? f['lastSeen'] as int : 0,
+                        isFriend: true,
+                        onInvite: _roomCode != null && _isHost
+                            ? () => _socket
+                                .emit('invite_friend', {'friendId': f['id']})
+                            : null,
+                        onRemove: () => _socket
+                            .emit('remove_friend', {'friendId': f['id']}),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     const Text('🎮 بازیکن‌های اخیر (هم‌بازی‌ها):',
@@ -1688,8 +2024,12 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                     ..._recentPlayers.map(
                       (u) => _userRow(
                         '${u['id']}',
-                        '${u['name']} (${u['games']} بازی)',
+                        '${u['name']}',
                         u['online'] == true,
+                        lastSeen:
+                            u['lastSeen'] is int ? u['lastSeen'] as int : 0,
+                        games: u['games'] is int ? u['games'] as int : 0,
+                        isFriend: _isFriend('${u['id']}'),
                         onAdd: _isFriend('${u['id']}')
                             ? null
                             : () => _socket
@@ -2834,7 +3174,11 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       child: Stack(
         children: [
           Center(
-            child: Icon(Icons.person, size: 26, color: const Color(0xFFCDBA96)),
+            child: Icon(
+              Icons.person,
+              size: 26,
+              color: _spymasterView ? spyColor : const Color(0xFFCDBA96),
+            ),
           ),
           Positioned(
             left: 5,
@@ -3159,10 +3503,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
             if (isFinal)
               SizedBox(
                 width: 260,
-                child: BannerButton(
+                height: 64,
+                child: PlaqueButton(
                   text: 'بازگشت به منو',
-                  banner: 'assets/images/btn_game_menu.jpg',
-                  fontSize: 16,
                   onTap: () async {
                     await _setPortrait();
                     if (mounted) Navigator.pop(context);
@@ -3172,10 +3515,9 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
             else if (!widget.online || _isHost)
               SizedBox(
                 width: 260,
-                child: BannerButton(
+                height: 64,
+                child: PlaqueButton(
                   text: 'دست بعد',
-                  banner: 'assets/images/btn_game_nexthand.jpg',
-                  fontSize: 16,
                   onTap: () => setState(() => _nextHand()),
                 ),
               )
@@ -3268,19 +3610,6 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                                   if (mounted) Navigator.pop(context);
                                 },
                               ),
-                              if (!widget.online)
-                                IconButton(
-                                  icon: Icon(
-                                    _spymasterView
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    color: Colors.white70,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => setState(
-                                    () => _spymasterView = !_spymasterView,
-                                  ),
-                                ),
                               IconButton(
                                 icon: Icon(
                                   sounds.isMuted
@@ -3296,6 +3625,54 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                               ),
                             ],
                           ),
+                          if (!widget.online) ...[
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: () => setState(
+                                  () => _spymasterView = !_spymasterView),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                width: double.infinity,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: _spymasterView
+                                      ? const Color(0xFFE8B33C)
+                                          .withOpacity(0.25)
+                                      : Colors.white10,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFE8B33C).withOpacity(
+                                        _spymasterView ? 0.9 : 0.4),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      _spymasterView
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      color: const Color(0xFFE8B33C),
+                                      size: 22,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _spymasterView
+                                          ? 'پنهان کردن کارت‌ها'
+                                          : 'دیدن کارت‌ها',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                           if (widget.online)
                             Text(
                               'اتاق ${widget.roomCode ?? ''}',
@@ -3530,16 +3907,11 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
                               ),
                             // دکمه پایان نوبت فقط برای بازیکن فعال
                             if (!widget.online || _isMyTurn())
-                              ScaleTransition(
-                                scale: _showTurnChangeMessage
-                                    ? _pulseAnimation
-                                    : const AlwaysStoppedAnimation(1.0),
-                                child: BannerButton(
-                                  text: 'پایان نوبت',
-                                  banner: 'assets/images/btn_game_endturn.jpg',
-                                  fontSize: 15,
-                                  onTap: _endTurn,
-                                ),
+                              BannerButton(
+                                text: 'پایان نوبت',
+                                banner: 'assets/images/btn_game_endturn.jpg',
+                                fontSize: 15,
+                                onTap: _endTurn,
                               ),
                           ],
                           const SizedBox(height: 10),
