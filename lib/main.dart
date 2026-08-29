@@ -114,14 +114,30 @@ void main() async {
 
 // ---------------- مدیریت صدا ----------------
 class SoundManager {
-  final AudioPlayer _player = AudioPlayer();
-  final AudioPlayer _flipPlayer = AudioPlayer();
+  AudioPool? _fxPool; // pool برای صداهای افکت (correct/wrong/win/lose/flip)
   final AudioPlayer _music = AudioPlayer();
   bool _isMuted = false;
   bool _themeStarted = false;
   bool _inGame = false;
+  bool _poolReady = false;
 
   bool get isMuted => _isMuted;
+
+  /// pool رو یک‌بار آماده می‌کنه (۵ پلیر همزمان برای افکت‌ها)
+  Future<void> _ensurePool() async {
+    if (_poolReady) return;
+    try {
+      _fxPool = await AudioPool.create(
+        source: AssetSource('audio/flip.mp3'), // پیش‌فرض
+        maxPlayers: 5,
+        minPlayers: 2,
+      );
+      _poolReady = true;
+    } catch (_) {
+      // اگه pool جواب نداد، بی‌صدا ادامه می‌دیم
+      _poolReady = false;
+    }
+  }
 
   void toggleMute() {
     _isMuted = !_isMuted;
@@ -134,13 +150,11 @@ class SoundManager {
     }
   }
 
-  /// ورود به بازی: موزیک پس‌زمینه قطع می‌شه
   void enterGame() {
     _inGame = true;
     _music.pause();
   }
 
-  /// خروج از بازی: موزیک پس‌زمینه برمی‌گرده
   void exitGame() {
     _inGame = false;
     if (!_isMuted && _themeStarted) {
@@ -156,26 +170,34 @@ class SoundManager {
     });
   }
 
-  void _play(String file) {
+  void _playEffect(String file) {
     if (_isMuted) return;
+    _ensurePool();
     try {
-      _player.play(AssetSource('audio/$file')).catchError((_) {});
-      _afterEffect();
+      // AudioPool فقط یه source قبول می‌کنه، پس از پلیر خام استفاده می‌کنیم
+      // اما با چند پلیر چرخشی که قطع نکنن همدیگه رو
+      final p = AudioPlayer();
+      p.play(AssetSource('audio/$file')).then((_) {
+        _afterEffect();
+        // بعد از پخش پلیر رو آزاد می‌کنیم
+        Future.delayed(const Duration(seconds: 3), () {
+          try {
+            p.dispose();
+          } catch (_) {}
+        });
+      }).catchError((_) {
+        try {
+          p.dispose();
+        } catch (_) {}
+      });
     } catch (_) {}
   }
 
-  void playFlip() {
-    if (_isMuted) return;
-    try {
-      _flipPlayer.play(AssetSource('audio/flip.mp3')).catchError((_) {});
-      _afterEffect();
-    } catch (_) {}
-  }
-
-  void playCorrect() => _play('correct.mp3');
-  void playWrong() => _play('wrong.mp3');
-  void playWin() => _play('win.mp3');
-  void playLose() => _play('lose.mp3');
+  void playFlip() => _playEffect('flip.mp3');
+  void playCorrect() => _playEffect('correct.mp3');
+  void playWrong() => _playEffect('wrong.mp3');
+  void playWin() => _playEffect('win.mp3');
+  void playLose() => _playEffect('lose.mp3');
 
   void startTheme() {
     if (_isMuted || _themeStarted) return;
@@ -3173,74 +3195,69 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
       ),
       child: Stack(
         children: [
-          Center(
-            child: Icon(
-              Icons.person,
-              size: 26,
-              color: _spymasterView ? spyColor : const Color(0xFFCDBA96),
-            ),
-          ),
-          Positioned(
-            left: 5,
-            right: 5,
-            top: 4,
-            child: Transform.rotate(
-              angle: 3.14159,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.75),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                alignment: Alignment.center,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    word,
-                    style: const TextStyle(
-                      color: Color(0xFF4A4A4A),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
+          Column(
+            children: [
+              // نیمه بالا: کلمه چرخیده (برای بازیکن روبرو)
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Transform.rotate(
+                      angle: 3.14159,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          word,
+                          style: const TextStyle(
+                            color: Color(0xFF4A4A4A),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            left: 5,
-            right: 5,
-            bottom: 4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
+              // خط جداکننده وسط کارت
+              Container(
+                height: 1,
+                color: const Color(0xFFB9A77F).withOpacity(0.6),
               ),
-              alignment: Alignment.center,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  word,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+              // نیمه پایین: کلمه عادی (برای خود بازیکن)
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        word,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 24,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
           if (_spymasterView)
             Positioned(
-              top: 6,
-              left: 6,
+              top: 4,
+              left: 4,
               child: Container(
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
                   color: spyColor,
                   shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1),
                 ),
               ),
             ),
