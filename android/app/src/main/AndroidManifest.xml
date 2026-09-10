@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 🔧 این پرمیژن برای بیلدهای release ضروریه — برخلاف بیلدهای debug/profile
+         که فلاتر خودش این رو موقتاً اضافه می‌کنه، بیلد release به‌صورت پیش‌فرض
+         هیچ دسترسی اینترنتی نداره مگه این‌که اینجا صراحتاً تعریف بشه. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="codenames_persian"
         android:name="${applicationName}"
