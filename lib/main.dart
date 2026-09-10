@@ -57,16 +57,18 @@ String formatLastSeen(int? ts) {
   return 'مدت‌ها پیش';
 }
 
+// ==========================================================================
+// 🔧 SERVER ADDRESS — EDIT THIS ONE LINE BEFORE BUILDING THE APP
+// Set this to your Linux server's public IP or domain once you have it,
+// e.g. 'http://45.12.34.56:3000' or 'https://codenames.yourdomain.ir'.
+// Leave it as-is only for local testing on the same machine/network.
+// ==========================================================================
+const String kServerUrl = 'http://89.44.241.170:3000';
+
 IO.Socket createSocket() {
-  // انتخاب آدرس بر اساس پلتفرم
-  String serverUrl;
-  if (kIsWeb) {
-    // مرورگر: localhost
-    serverUrl = 'http://localhost:3000';
-  } else {
-    // موبایل: IP لپ‌تاپ
-    serverUrl = 'http://10.72.22.100:3000';
-  }
+  // روی وب و در حالت تست محلی از localhost استفاده می‌کنیم،
+  // در غیر این صورت آدرس سرور واقعی (kServerUrl بالا) استفاده می‌شود.
+  final String serverUrl = kIsWeb ? 'http://localhost:3000' : kServerUrl;
 
   return IO.io(serverUrl, <String, dynamic>{
     'transports': ['websocket'],
@@ -1163,6 +1165,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
           setState(() => _status = '⏳ اتصال برقرار نشد؛ در حال تلاش دوباره...'),
     );
     _socket.on('players', (list) {
+      if (!mounted) return;
       setState(() {
         _players =
             (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
@@ -1177,12 +1180,14 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       );
     });
     _socket.on('friends', (list) {
+      if (!mounted) return;
       setState(() {
         _friends =
             (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
       });
     });
     _socket.on('pending_requests', (list) {
+      if (!mounted) return;
       setState(() {
         _pendingRequests =
             (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
@@ -1301,26 +1306,31 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       }
     });
     _socket.on('recent_players', (list) {
+      if (!mounted) return;
       setState(() {
         _recentPlayers =
             (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
       });
     });
     _socket.on('room_list', (list) {
+      if (!mounted) return;
       setState(() {
         _publicRooms =
             (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
       });
     });
     _socket.on('host_changed', (data) {
+      if (!mounted) return;
       if ('${data['hostId']}' == UserProfile.id) {
         setState(() => _isHost = true);
       }
     });
     _socket.on('game_aborted', (_) {
+      if (!mounted) return;
       setState(() => _navigated = false);
     });
     _socket.on('left_room', (_) {
+      if (!mounted) return;
       setState(() {
         _roomCode = null;
         _isHost = false;
@@ -1338,6 +1348,20 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     if (_roomCode != null) {
       _socket.emit('leave');
     }
+    // 🔧 پاکسازی همه‌ی listener هایی که در initState ثبت شدن
+    // (جلوگیری از duplicate handler / memory leak)
+    _socket.off('players');
+    _socket.off('setup');
+    _socket.off('friends');
+    _socket.off('pending_requests');
+    _socket.off('friend_request');
+    _socket.off('friend_accepted');
+    _socket.off('room_invite');
+    _socket.off('recent_players');
+    _socket.off('room_list');
+    _socket.off('host_changed');
+    _socket.off('game_aborted');
+    _socket.off('left_room');
     // اگه وارد بازی نشدیم، سوکت رو کامل قطع کن
     if (!_navigated) {
       _socket.disconnect();

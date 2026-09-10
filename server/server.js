@@ -6,7 +6,14 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+// 🔧 در صورت نیاز، دامنه مجاز رو با متغیر محیطی ALLOWED_ORIGIN محدود کن
+// (پیش‌فرض: باز برای همه، چون کلاینت موبایل/دسکتاپ origin مشخصی نداره)
+const io = new Server(server, {
+  cors: { origin: process.env.ALLOWED_ORIGIN || '*' },
+});
+
+// health-check ساده برای تست دیپلوی روی سرور
+app.get('/health', (req, res) => res.json({ ok: true, rooms: rooms.size }));
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 
