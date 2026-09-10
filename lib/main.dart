@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:async';
 import 'dart:math';
 
@@ -66,12 +65,16 @@ String formatLastSeen(int? ts) {
 const String kServerUrl = 'http://89.44.241.170:3000';
 
 IO.Socket createSocket() {
-  // روی وب و در حالت تست محلی از localhost استفاده می‌کنیم،
-  // در غیر این صورت آدرس سرور واقعی (kServerUrl بالا) استفاده می‌شود.
-  final String serverUrl = kIsWeb ? 'http://localhost:3000' : kServerUrl;
+  // همیشه به سرور واقعی وصل می‌شیم — localhost فقط وقتی درست کار می‌کنه که
+  // خود سرور Node.js هم روی همین سیستمی که فلاتر رو اجرا کردی، بالا باشه.
+  final String serverUrl = kServerUrl;
 
   return IO.io(serverUrl, <String, dynamic>{
-    'transports': ['websocket'],
+    // 🔧 اول با polling (HTTP معمولی) وصل می‌شه، بعد اگه شد به websocket
+    // ارتقا پیدا می‌کنه. این fallback خیلی مهمه چون بعضی شبکه‌ها/اپراتورهای
+    // موبایل، درخواست‌های HTTP معمولی رو رد می‌کنن ولی websocket خام رو
+    // مسدود یا مختل می‌کنن (حتی وقتی همون پورت با مرورگر باز می‌شه).
+    'transports': ['polling', 'websocket'],
     'autoConnect': true,
   });
 }
@@ -1155,14 +1158,17 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     super.initState();
     _socket = createSocket();
     _socket.onConnect((_) {
+      if (!mounted) return;
       setState(() => _status = '✅ متصل شدی');
       // ثبت یوزر ثابت روی سرور
       _socket.emit(
           'register', {'userId': UserProfile.id, 'name': UserProfile.name});
     });
     _socket.onConnectError(
-      (_) =>
-          setState(() => _status = '⏳ اتصال برقرار نشد؛ در حال تلاش دوباره...'),
+      (_) {
+        if (!mounted) return;
+        setState(() => _status = '⏳ اتصال برقرار نشد؛ در حال تلاش دوباره...');
+      },
     );
     _socket.on('players', (list) {
       if (!mounted) return;
