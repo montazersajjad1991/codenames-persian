@@ -34,7 +34,13 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --no-tree-shake-icons
+        run: |
+          flutter build apk --release --no-tree-shake-icons || true
+          echo "=== Searching for APK files ==="
+          find build -name "*.apk" 2>/dev/null || echo "No APK in build/"
+          find android -name "*.apk" 2>/dev/null || echo "No APK in android/"
+          ls -la build/app/outputs/apk/release/ 2>/dev/null || echo "release dir not found"
+          ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "flutter-apk dir not found"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
