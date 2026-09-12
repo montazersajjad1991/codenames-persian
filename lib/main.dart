@@ -62,7 +62,7 @@ String formatLastSeen(int? ts) {
 // e.g. 'http://45.12.34.56:3000' or 'https://codenames.yourdomain.ir'.
 // Leave it as-is only for local testing on the same machine/network.
 // ==========================================================================
-const String kServerUrl = 'http://89.44.241.170:3000';
+const String kServerUrl = 'https://boarderbros.ir';
 
 IO.Socket createSocket() {
   // همیشه به سرور واقعی وصل می‌شیم — localhost فقط وقتی درست کار می‌کنه که

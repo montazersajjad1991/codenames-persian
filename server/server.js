@@ -1,354 +1,401 @@
 const express = require('express');
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 const { Server } = require('socket.io');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
+
 const server = http.createServer(app);
-// 🔧 در صورت نیاز، دامنه مجاز رو با متغیر محیطی ALLOWED_ORIGIN محدود کن
-// (پیش‌فرض: باز برای همه، چون کلاینت موبایل/دسکتاپ origin مشخصی نداره)
 const io = new Server(server, {
-  cors: { origin: process.env.ALLOWED_ORIGIN || '*' },
+  cors: {
+    origin: "*", // Allows your Flutter app and web clients to connect
+    methods: ["GET", "POST"]
+  },
+  transports: ['polling', 'websocket'] // Matches your Flutter client's fallback strategy
 });
 
-// health-check ساده برای تست دیپلوی روی سرور
-app.get('/health', (req, res) => res.json({ ok: true, rooms: rooms.size }));
+// ==========================================
+// 🗄️ IN-MEMORY DATABASE (Simple & Fast)
+// ==========================================
+const users = new Map(); // userId -> { id, name, socketId, lastSeen, friends: [], pendingRequests: [], recentPlayers: [] }
+const rooms = new Map(); // roomCode -> { code, hostId, isPublic, players: [userId], inGame: false, assignments: [], maxHands: 3, board: null, state: null }
 
-const DATA_FILE = path.join(__dirname, 'data.json');
-
-let db = {
-  profiles: {},
-  friends: {},        // { userId: [friendId1, friendId2, ...] } (دوطرفه)
-  pending: {},        // { recipientId: [{ from, name, ts }] }
-  recent: {},
-};
-try {
-  if (fs.existsSync(DATA_FILE)) {
-    const loaded = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    db.profiles = loaded.profiles || {};
-    db.friends = loaded.friends || {};
-    db.pending = loaded.pending || {};
-    db.recent = loaded.recent || {};
+// ==========================================
+// 🛠️ HELPER FUNCTIONS
+// ==========================================
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
   }
-} catch (e) {}
-function saveDb() { try { fs.writeFileSync(DATA_FILE, JSON.stringify(db)); } catch (e) {} }
-
-const online = new Map();
-const socketToUser = new Map();
-const rooms = new Map();
-
-function userRoom(userId) {
-  for (const r of rooms.values()) if (r.players.includes(userId)) return r;
-  return null;
-}
-function roomList() {
-  return [...rooms.values()]
-    .filter(r => r.players.length < 4)
-    .map(r => ({ code: r.code, roomName: r.name, players: r.players.length, inGame: !!r.inGame }));
-}
-function broadcastRooms() { io.emit('room_list', roomList()); }
-function friendsOf(userId) {
-  return (db.friends[userId] || []).map(fid => ({
-    id: fid,
-    name: db.profiles[fid] ? db.profiles[fid].name : '?',
-    online: online.has(fid),
-    lastSeen: db.profiles[fid] ? db.profiles[fid].lastSeen : 0,
-  }));
-}
-function pendingOf(userId) {
-  return (db.pending[userId] || []).map(r => ({
-    from: r.from,
-    name: db.profiles[r.from] ? db.profiles[r.from].name : '?',
-    online: online.has(r.from),
-    ts: r.ts,
-  }));
-}
-function emitFriends(userId) {
-  const u = online.get(userId);
-  if (u) {
-    io.to(u.socketId).emit('friends', friendsOf(userId));
-    io.to(u.socketId).emit('pending_requests', pendingOf(userId));
-  }
-}
-function recentsOf(userId) {
-  const rec = db.recent[userId] || {};
-  return Object.entries(rec).map(([id, v]) => ({
-    id,
-    name: v.name,
-    games: v.games,
-    online: online.has(id),
-    lastSeen: db.profiles[id] ? db.profiles[id].lastSeen : 0,
-  }));
-}
-function playersPayload(room) {
-  return room.players.map(id => ({ id, name: online.get(id) ? online.get(id).name : '?' }));
-}
-function migrateHost(room, leftId) {
-  if (room.host === leftId && room.players.length > 0) {
-    room.host = room.players[0];
-    io.to(room.code).emit('host_changed', { hostId: room.host });
-  }
-}
-function removePlayer(room, userId) {
-  room.players = room.players.filter(id => id !== userId);
-  const u = online.get(userId);
-  if (u) io.to(u.socketId).emit('left_room');
-  if (!room.players.length) {
-    rooms.delete(room.code);
-  } else {
-    migrateHost(room, userId);
-    if (room.inGame) {
-      room.inGame = false;
-      room.board = null;
-      room.state = null;
-      room.assignments = null;
-      io.to(room.code).emit('game_aborted', { leftId: userId });
-    }
-    io.to(room.code).emit('player_left', { id: userId });
-    io.to(room.code).emit('players', playersPayload(room));
-  }
-  broadcastRooms();
-}
-function updateLastSeen(userId) {
-  if (db.profiles[userId]) {
-    db.profiles[userId].lastSeen = Date.now();
-  }
+  return code;
 }
 
-io.on('connection', (socket) => {
-  socket.on('register', ({ userId, name }) => {
-    if (!userId || !name) return;
-    socketToUser.set(socket.id, userId);
-    online.set(userId, { socketId: socket.id, name });
-    db.profiles[userId] = { name, lastSeen: Date.now() };
-    saveDb();
-    socket.emit('friends', friendsOf(userId));
-    socket.emit('pending_requests', pendingOf(userId));
-    socket.emit('recent_players', recentsOf(userId));
-    broadcastRooms();
-  });
-
-  socket.on('search_user', (data, ack) => {
-    const q = (data.query || '').trim().toLowerCase();
-    const me = socketToUser.get(socket.id);
-    const results = Object.entries(db.profiles)
-      .filter(([id, p]) => q.length > 0 && id !== me &&
-        (p.name.toLowerCase().includes(q) || id.toLowerCase().includes(q)))
-      .slice(0, 10)
-      .map(([id, p]) => ({
-        id,
-        name: p.name,
-        online: online.has(id),
-        lastSeen: p.lastSeen || 0,
-        isFriend: (db.friends[me] || []).includes(id),
-        pendingSent: (db.pending[id] || []).some(r => r.from === me),
-      }));
-    if (typeof ack === 'function') ack({ results });
-  });
-
-  // درخواست دوستی (دوطرفه - تایید لازم)
-  socket.on('add_friend', ({ friendId }) => {
-    const me = socketToUser.get(socket.id);
-    if (!me || !friendId || friendId === me) return;
-    if ((db.friends[me] || []).includes(friendId)) return; // قبلاً دوستیم
-    // اگه اون قبلاً به من درخواست داده، مستقیم تایید میشه
-    if ((db.pending[me] || []).some(r => r.from === friendId)) {
-      db.friends[me] = db.friends[me] || [];
-      db.friends[friendId] = db.friends[friendId] || [];
-      if (!db.friends[me].includes(friendId)) db.friends[me].push(friendId);
-      if (!db.friends[friendId].includes(me)) db.friends[friendId].push(me);
-      db.pending[me] = (db.pending[me] || []).filter(r => r.from !== friendId);
-      saveDb();
-      emitFriends(me);
-      emitFriends(friendId);
-      return;
-    }
-    // وگرنه درخواست میفرستیم
-    db.pending[friendId] = db.pending[friendId] || [];
-    if (db.pending[friendId].some(r => r.from === me)) return;
-    db.pending[friendId].push({ from: me, name: db.profiles[me].name, ts: Date.now() });
-    saveDb();
-    const u = online.get(friendId);
-    if (u) {
-      io.to(u.socketId).emit('friend_request', {
-        from: me,
-        name: db.profiles[me].name,
-        ts: Date.now(),
-      });
-      io.to(u.socketId).emit('pending_requests', pendingOf(friendId));
-    }
-    // به درخواست‌دهنده وضعیت «در انتظار» رو برگردون
-    emitFriends(me);
-  });
-
-  // پاسخ به درخواست
-  socket.on('respond_friend', ({ from, accept }) => {
-    const me = socketToUser.get(socket.id);
-    if (!me || !from) return;
-    db.pending[me] = (db.pending[me] || []).filter(r => r.from !== from);
-    if (accept) {
-      db.friends[me] = db.friends[me] || [];
-      db.friends[from] = db.friends[from] || [];
-      if (!db.friends[me].includes(from)) db.friends[me].push(from);
-      if (!db.friends[from].includes(me)) db.friends[from].push(me);
-      // به هر دو اطلاع بده
-      const u = online.get(from);
-      if (u) io.to(u.socketId).emit('friend_accepted', { id: me, name: db.profiles[me].name });
-    }
-    saveDb();
-    emitFriends(me);
-    emitFriends(from);
-  });
-
-  // حذف دوست
-  socket.on('remove_friend', ({ friendId }) => {
-    const me = socketToUser.get(socket.id);
-    if (!me) return;
-    db.friends[me] = (db.friends[me] || []).filter(f => f !== friendId);
-    db.friends[friendId] = (db.friends[friendId] || []).filter(f => f !== me);
-    saveDb();
-    emitFriends(me);
-    emitFriends(friendId);
-  });
-
-  // اینوایت به اتاق (فقط host)
-  socket.on('invite_friend', ({ friendId }) => {
-    const me = socketToUser.get(socket.id);
-    if (!me || !friendId) return;
-    const room = userRoom(me);
-    if (!room || room.host !== me) return;
-    if (room.players.length >= 4) return;
-    if (!online.has(friendId)) return;
-    const u = online.get(friendId);
-    io.to(u.socketId).emit('room_invite', {
-      code: room.code,
-      from: me,
-      fromName: db.profiles[me].name,
+function getUser(userId) {
+  if (!users.has(userId)) {
+    users.set(userId, {
+      id: userId,
+      name: 'کاربر جدید',
+      socketId: null,
+      lastSeen: Date.now(),
+      friends: [],
+      pendingRequests: [],
+      recentPlayers: []
     });
+  }
+  return users.get(userId);
+}
+
+function updateUserLastSeen(userId) {
+  const user = getUser(userId);
+  user.lastSeen = Date.now();
+}
+
+function getRoomPlayers(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return [];
+  return room.players.map(id => {
+    const u = getUser(id);
+    return { id: u.id, name: u.name, online: u.socketId !== null };
+  });
+}
+
+function broadcastRoomList() {
+  const publicRooms = Array.from(rooms.values())
+    .filter(r => r.isPublic)
+    .map(r => ({
+      code: r.code,
+      roomName: `اتاق ${r.code}`,
+      players: r.players.length,
+      inGame: r.inGame
+    }));
+  io.emit('room_list', publicRooms);
+}
+
+function sendFriendsList(socket) {
+  const user = users.get(socket.userId);
+  if (!user) return;
+  
+  const friendsData = user.friends.map(fid => {
+    const f = getUser(fid);
+    return { id: f.id, name: f.name, online: f.socketId !== null, lastSeen: f.lastSeen };
+  });
+  socket.emit('friends', friendsData);
+  
+  const pendingData = user.pendingRequests.map(fid => {
+    const f = getUser(fid);
+    return { from: f.id, name: f.name, online: f.socketId !== null, lastSeen: f.lastSeen };
+  });
+  socket.emit('pending_requests', pendingData);
+}
+
+function sendRecentPlayers(socket) {
+  const user = users.get(socket.userId);
+  if (!user) return;
+  const recentData = user.recentPlayers.map(rp => {
+    const p = getUser(rp.id);
+    return { id: p.id, name: p.name, online: p.socketId !== null, lastSeen: p.lastSeen, games: rp.games || 1 };
+  });
+  socket.emit('recent_players', recentData);
+}
+
+// ==========================================
+// 🔌 SOCKET.IO CONNECTION LOGIC
+// ==========================================
+io.on('connection', (socket) => {
+  console.log('✅ کاربر متصل شد:', socket.id);
+
+  // 1. ثبت نام کاربر
+  socket.on('register', (data) => {
+    const { userId, name } = data;
+    const user = getUser(userId);
+    user.name = name || user.name;
+    user.socketId = socket.id;
+    socket.userId = userId;
+    
+    socket.join(userId); // Join personal room for direct invites/messages
+    sendFriendsList(socket);
+    sendRecentPlayers(socket);
+    broadcastRoomList();
   });
 
-  socket.on('list_rooms', (data, ack) => {
-    if (typeof ack === 'function') ack({ rooms: roomList() });
-  });
+  // 2. ساخت اتاق
+  socket.on('create_room', (data, callback) => {
+    const userId = socket.userId;
+    if (!userId) return callback({ error: 'ثبت نام نشده' });
 
-  socket.on('create_room', (data, ack) => {
-    const me = socketToUser.get(socket.id);
-    if (!me) return;
-    const existing = userRoom(me);
-    if (existing) { if (ack) ack({ code: existing.code }); return; }
-    let code;
-    do { code = String(Math.floor(10000 + Math.random() * 90000)); } while (rooms.has(code));
-    const room = { code, name: code, isPublic: !!data.isPublic, players: [me], host: me, inGame: false };
-    rooms.set(code, room);
+    const code = generateRoomCode();
+    rooms.set(code, {
+      code,
+      hostId: userId,
+      isPublic: data.isPublic !== false,
+      players: [userId],
+      inGame: false,
+      assignments: [],
+      maxHands: 3,
+      board: null,
+      state: null
+    });
+    
     socket.join(code);
-    io.to(code).emit('players', playersPayload(room));
-    broadcastRooms();
-    if (ack) ack({ code });
+    callback({ code });
+    io.to(code).emit('players', getRoomPlayers(code));
+    broadcastRoomList();
   });
 
-  socket.on('join_room', (data, ack) => {
-    const me = socketToUser.get(socket.id);
-    if (!me) return;
-    const room = rooms.get(String(data.code || '').trim());
-    if (!room) { if (ack) ack({ error: 'Room not found!' }); return; }
-    if (room.players.length >= 4) { if (ack) ack({ error: 'Room full!' }); return; }
-    if (!room.players.includes(me)) room.players.push(me);
-    socket.join(room.code);
-    if (room.inGame && room.assignments) {
-      const seat = room.assignments.find(a => !room.players.includes(a.id));
-      if (seat) {
-        seat.id = me;
-        socket.emit('setup', { assignments: room.assignments, maxHands: room.maxHands || 3 });
-      }
+  // 3. پیوستن به اتاق
+  socket.on('join_room', (data, callback) => {
+    const userId = socket.userId;
+    const { code } = data;
+    const room = rooms.get(code);
+
+    if (!room) return callback({ error: 'اتاق پیدا نشد' });
+    if (room.players.length >= 4) return callback({ error: 'اتاق پر است' });
+    if (room.inGame) return callback({ error: 'بازی در حال جریان است' });
+
+    if (!room.players.includes(userId)) {
+      room.players.push(userId);
     }
-    io.to(room.code).emit('players', playersPayload(room));
-    broadcastRooms();
-    if (ack) ack({ code: room.code });
+    
+    socket.join(code);
+    callback({ code });
+    io.to(code).emit('players', getRoomPlayers(code));
+    broadcastRoomList();
   });
 
+  // 4. خروج از اتاق
   socket.on('leave', () => {
-    const me = socketToUser.get(socket.id);
-    if (!me) return;
-    const room = userRoom(me);
-    if (room) removePlayer(room, me);
-  });
+    const userId = socket.userId;
+    if (!userId) return;
 
-  socket.on('setup', (data) => {
-    const me = socketToUser.get(socket.id);
-    const room = me ? userRoom(me) : null;
-    if (!room) return;
-    room.inGame = true;
-    room.assignments = (data.assignments || []).map(a => ({ id: a.id, team: a.team, role: a.role }));
-    room.maxHands = data.maxHands || 3;
-    const ids = (data.assignments || []).map(a => a.id);
-    for (const a of ids) {
-      for (const b of ids) {
-        if (a === b) continue;
-        db.recent[a] = db.recent[a] || {};
-        const entry = db.recent[a][b] || { games: 0, name: online.get(b) ? online.get(b).name : '?' };
-        entry.games += 1;
-        if (online.get(b)) entry.name = online.get(b).name;
-        db.recent[a][b] = entry;
+    for (const [code, room] of rooms.entries()) {
+      if (room.players.includes(userId)) {
+        room.players = room.players.filter(id => id !== userId);
+        io.to(code).emit('player_left', {});
+
+        if (room.players.length === 0) {
+          rooms.delete(code);
+          broadcastRoomList();
+        } else if (room.hostId === userId) {
+          if (room.inGame) {
+            io.to(code).emit('game_aborted', {});
+            rooms.delete(code);
+            broadcastRoomList();
+          } else {
+            const newHost = room.players[0];
+            room.hostId = newHost;
+            io.to(code).emit('host_changed', { hostId: newHost });
+          }
+        }
+        
+        io.to(code).emit('players', getRoomPlayers(code));
+        socket.leave(code);
+        break;
       }
     }
-    saveDb();
-    for (const id of ids) {
-      const u = online.get(id);
-      if (u) io.to(u.socketId).emit('recent_players', recentsOf(id));
+  });
+
+  // 5. لیست اتاق‌های عمومی
+  socket.on('list_rooms', (data, callback) => {
+    const publicRooms = Array.from(rooms.values())
+      .filter(r => r.isPublic)
+      .map(r => ({ code: r.code, roomName: `اتاق ${r.code}`, players: r.players.length, inGame: r.inGame }));
+    callback({ rooms: publicRooms });
+  });
+
+  // 6. جستجوی کاربر
+  socket.on('search_user', (data, callback) => {
+    const { query } = data;
+    if (!query) return callback({ results: [] });
+
+    const results = [];
+    for (const [id, user] of users.entries()) {
+      if (id === socket.userId) continue;
+      if (user.name.toLowerCase().includes(query.toLowerCase()) || id.includes(query)) {
+        const currentUser = getUser(socket.userId);
+        const isFriend = currentUser.friends.includes(id);
+        const pendingSent = user.pendingRequests.includes(socket.userId);
+        results.push({ id: user.id, name: user.name, online: user.socketId !== null, lastSeen: user.lastSeen, isFriend, pendingSent });
+      }
     }
-    io.to(room.code).emit('setup', data);
-    broadcastRooms();
+    callback({ results });
   });
 
-  socket.on('board', (data) => {
-    const me = socketToUser.get(socket.id);
-    const room = me ? userRoom(me) : null;
-    if (!room) return;
-    room.board = data;
-    socket.to(room.code).emit('board', data);
+  // 7. سیستم دوستی
+  socket.on('add_friend', (data) => {
+    const { friendId } = data;
+    const user = getUser(socket.userId);
+    const friend = getUser(friendId);
+
+    if (!user.friends.includes(friendId) && !friend.pendingRequests.includes(socket.userId)) {
+      friend.pendingRequests.push(socket.userId);
+      const friendSocket = io.sockets.sockets.get(friend.socketId);
+      if (friendSocket) {
+        friendSocket.emit('friend_request', { from: socket.userId, name: user.name });
+        sendFriendsList(friendSocket);
+      }
+    }
   });
 
-  socket.on('state', (data) => {
-    const me = socketToUser.get(socket.id);
-    const room = me ? userRoom(me) : null;
-    if (!room) return;
-    room.state = data;
-    socket.to(room.code).emit('state', data);
+  socket.on('remove_friend', (data) => {
+    const { friendId } = data;
+    const user = getUser(socket.userId);
+    const friend = getUser(friendId);
+    user.friends = user.friends.filter(id => id !== friendId);
+    friend.friends = friend.friends.filter(id => id !== socket.userId);
+    sendFriendsList(socket);
+  });
+
+  socket.on('respond_friend', (data) => {
+    const { from, accept } = data;
+    const user = getUser(socket.userId);
+    const friend = getUser(from);
+
+    user.pendingRequests = user.pendingRequests.filter(id => id !== from);
+    sendFriendsList(socket);
+
+    if (accept) {
+      if (!user.friends.includes(from)) user.friends.push(from);
+      if (!friend.friends.includes(socket.userId)) friend.friends.push(socket.userId);
+      
+      const friendSocket = io.sockets.sockets.get(friend.socketId);
+      if (friendSocket) {
+        friendSocket.emit('friend_accepted', { name: user.name });
+        sendFriendsList(friendSocket);
+      }
+    }
+  });
+
+  socket.on('invite_friend', (data) => {
+    const { friendId } = data;
+    const user = getUser(socket.userId);
+    let roomCode = null;
+    for (const [code, room] of rooms.entries()) {
+      if (room.players.includes(socket.userId)) { roomCode = code; break; }
+    }
+    if (roomCode) {
+      const friendSocket = io.sockets.sockets.get(getUser(friendId).socketId);
+      if (friendSocket) friendSocket.emit('room_invite', { code: roomCode, fromName: user.name });
+    }
+  });
+
+  // 8. منطق بازی
+  socket.on('setup', (data) => {
+    const userId = socket.userId;
+    for (const room of rooms.values()) {
+      if (room.players.includes(userId) && room.hostId === userId) {
+        room.assignments = data.assignments;
+        room.maxHands = data.maxHands || 3;
+        room.inGame = true;
+        io.to(room.code).emit('setup', { assignments: room.assignments, maxHands: room.maxHands });
+        break;
+      }
+    }
   });
 
   socket.on('resync', (data) => {
-    const room = rooms.get(String((data && data.room) || ''));
-    if (!room) return;
-    socket.join(room.code);
-    if (room.board) socket.emit('board', room.board);
-    if (room.state) socket.emit('state', room.state);
+    const { room: roomCode } = data;
+    const room = rooms.get(roomCode);
+    if (room && room.players.includes(socket.userId)) {
+      if (room.board) socket.emit('board', room.board);
+      if (room.state) socket.emit('state', room.state);
+    }
   });
 
-  socket.on('rejoin', ({ room: code }) => {
-    const me = socketToUser.get(socket.id);
-    const room = rooms.get(code);
-    if (!room || !me) return;
-    socket.join(code);
-    io.to(code).emit('players', playersPayload(room));
+  socket.on('rejoin', (data) => {
+    const { room: roomCode, oldId } = data;
+    const userId = socket.userId;
+    const room = rooms.get(roomCode);
+    if (room && room.players.includes(userId)) {
+      getUser(userId).socketId = socket.id;
+      socket.join(roomCode);
+      if (room.board) socket.emit('board', room.board);
+      if (room.state) socket.emit('state', room.state);
+      io.to(roomCode).emit('players', getRoomPlayers(roomCode));
+    }
   });
 
-  socket.on('disconnect', () => {
-    const me = socketToUser.get(socket.id);
-    socketToUser.delete(socket.id);
-    if (!me) return;
-    updateLastSeen(me);
-    online.delete(me);
-    saveDb();
-    setTimeout(() => {
-      if (!online.has(me)) {
-        const room = userRoom(me);
-        if (room) removePlayer(room, me);
+  socket.on('state', (data) => {
+    const userId = socket.userId;
+    for (const room of rooms.values()) {
+      if (room.players.includes(userId)) {
+        room.state = data;
+        io.to(room.code).emit('state', data);
+        
+        // Update recent players
+        room.players.forEach(pid => {
+          if (pid !== userId) {
+            const pUser = getUser(pid);
+            const existing = pUser.recentPlayers.find(rp => rp.id === userId);
+            if (existing) existing.games = (existing.games || 1) + 1;
+            else pUser.recentPlayers.push({ id: userId, games: 1 });
+            pUser.recentPlayers = pUser.recentPlayers.slice(-20);
+            
+            const pSocket = io.sockets.sockets.get(pUser.socketId);
+            if (pSocket) sendRecentPlayers(pSocket);
+          }
+        });
+        break;
       }
-    }, 30000);
-    broadcastRooms();
+    }
+  });
+
+  socket.on('board', (data) => {
+    const userId = socket.userId;
+    for (const room of rooms.values()) {
+      if (room.players.includes(userId)) {
+        room.board = data;
+        io.to(room.code).emit('board', data);
+        break;
+      }
+    }
+  });
+
+  // 9. قطع اتصال
+  socket.on('disconnect', () => {
+    const userId = socket.userId;
+    if (userId) {
+      updateUserLastSeen(userId);
+      const user = getUser(userId);
+      user.socketId = null;
+
+      for (const friendId of user.friends) {
+        const friendSocket = io.sockets.sockets.get(getUser(friendId).socketId);
+        if (friendSocket) sendFriendsList(friendSocket);
+      }
+
+      for (const [code, room] of rooms.entries()) {
+        if (room.players.includes(userId)) {
+          io.to(code).emit('player_left', {});
+          if (room.hostId === userId) {
+            if (room.inGame) {
+              io.to(code).emit('game_aborted', {});
+              rooms.delete(code);
+              broadcastRoomList();
+            } else if (room.players.length > 1) {
+              const newHost = room.players.find(id => id !== userId);
+              room.hostId = newHost;
+              io.to(code).emit('host_changed', { hostId: newHost });
+            } else {
+              rooms.delete(code);
+              broadcastRoomList();
+            }
+          }
+          io.to(code).emit('players', getRoomPlayers(code));
+        }
+      }
+    }
+    console.log('❌ کاربر قطع شد:', socket.id);
   });
 });
 
+// ==========================================
+// 🚀 START SERVER
+// ==========================================
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('Codenames server running on http://localhost:' + PORT));
+server.listen(PORT, () => {
+  console.log(`🚀 سرور بازی اسم رمز روی پورت ${PORT} اجرا شد`);
+  console.log(`🌐 آدرس اتصال: http://boarderbros.ir`);
+});
