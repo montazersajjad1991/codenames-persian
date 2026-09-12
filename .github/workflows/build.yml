@@ -27,9 +27,8 @@ jobs:
           flutter-version: '3.24.5'  # ⬅️ تغییر به نسخه پایدارتر
           channel: 'stable'
           cache: true
-          
-      - name: Clean Android build
-        run: cd android && ./gradlew clean
+
+
 
       - name: Install dependencies
         run: flutter pub get
