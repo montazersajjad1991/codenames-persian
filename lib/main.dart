@@ -70,12 +70,13 @@ IO.Socket createSocket() {
   final String serverUrl = kServerUrl;
 
   return IO.io(serverUrl, <String, dynamic>{
-    // 🔧 اول با polling (HTTP معمولی) وصل می‌شه، بعد اگه شد به websocket
-    // ارتقا پیدا می‌کنه. این fallback خیلی مهمه چون بعضی شبکه‌ها/اپراتورهای
-    // موبایل، درخواست‌های HTTP معمولی رو رد می‌کنن ولی websocket خام رو
-    // مسدود یا مختل می‌کنن (حتی وقتی همون پورت با مرورگر باز می‌شه).
-    'transports': ['polling', 'websocket'],
+    // 🔧 فقط از websocket استفاده می‌کنیم چون موتور شبکه دارت روی موبایل
+    // با polling و SSL renegotiation مشکل داره و بی‌صدا شکست می‌خوره،
+    // در حالی که مرورگر (وب) این مشکل رو نداره.
+    'transports': ['websocket'],
     'autoConnect': true,
+    'forceNew': true,
+    'timeout': 10000,
   });
 }
 
