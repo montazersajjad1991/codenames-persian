@@ -20,6 +20,25 @@ const io = new Server(server, {
 // ==========================================
 const users = new Map(); // userId -> { id, name, socketId, lastSeen, friends: [], pendingRequests: [], recentPlayers: [] }
 const rooms = new Map(); // roomCode -> { code, hostId, isPublic, players: [userId], inGame: false, assignments: [], maxHands: 3, board: null, state: null }
+const disconnectTimers = new Map(); // userId -> timeout (مهلت برگشت بعد از قطعی در لابی)
+
+function removePlayerFromLobbyRooms(userId) {
+  for (const [code, room] of rooms.entries()) {
+    if (room.inGame || !room.players.includes(userId)) continue;
+    room.players = room.players.filter(id => id !== userId);
+    if (room.players.length === 0) {
+      rooms.delete(code);
+      broadcastRoomList();
+    } else {
+      if (room.hostId === userId) {
+        room.hostId = room.players[0];
+        io.to(code).emit('host_changed', { hostId: room.hostId });
+      }
+      io.to(code).emit('players', getRoomPlayers(code));
+      broadcastRoomList();
+    }
+  }
+}
 
 // ==========================================
 // 🛠️ HELPER FUNCTIONS
@@ -27,9 +46,12 @@ const rooms = new Map(); // roomCode -> { code, hostId, isPublic, players: [user
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
+  do {
+    code = '';
+    for (let i = 0; i < 4; i++) {
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+  } while (rooms.has(code));
   return code;
 }
 
@@ -122,6 +144,13 @@ io.on('connection', (socket) => {
     user.name = name || user.name;
     user.socketId = socket.id;
     socket.userId = userId;
+
+    // اگه تایمر حذف از اتاق فعال بوده، لغوش کن (کاربر برگشت)
+    const pendingKick = disconnectTimers.get(userId);
+    if (pendingKick) {
+      clearTimeout(pendingKick);
+      disconnectTimers.delete(userId);
+    }
     
     socket.join(userId); // Join personal room for direct invites/messages
     sendFriendsList(socket);
@@ -276,6 +305,8 @@ io.on('connection', (socket) => {
     if (accept) {
       if (!user.friends.includes(from)) user.friends.push(from);
       if (!friend.friends.includes(socket.userId)) friend.friends.push(socket.userId);
+      // درخواست متقابل همزمان هم پاک بشه
+      friend.pendingRequests = friend.pendingRequests.filter(id => id !== socket.userId);
       
       const friendSocket = io.sockets.sockets.get(friend.socketId);
       if (friendSocket) {
@@ -357,22 +388,26 @@ io.on('connection', (socket) => {
     const userId = socket.userId;
     for (const room of rooms.values()) {
       if (room.players.includes(userId)) {
+        const prevWinner = room.state ? room.state.winner : null;
         room.state = data;
         io.to(room.code).emit('state', data);
-        
-        // Update recent players
-        room.players.forEach(pid => {
-          if (pid !== userId) {
-            const pUser = getUser(pid);
-            const existing = pUser.recentPlayers.find(rp => rp.id === userId);
-            if (existing) existing.games = (existing.games || 1) + 1;
-            else pUser.recentPlayers.push({ id: userId, games: 1 });
-            pUser.recentPlayers = pUser.recentPlayers.slice(-20);
-            
-            const pSocket = io.sockets.sockets.get(pUser.socketId);
+
+        // شمردن «بازی» فقط وقتی یه دست واقعاً تموم بشه (برنده اعلام بشه)
+        if (data.winner && !prevWinner) {
+          room.players.forEach(pid => {
+            if (pid !== userId) {
+              const pUser = getUser(pid);
+              const existing = pUser.recentPlayers.find(rp => rp.id === userId);
+              if (existing) existing.games = (existing.games || 1) + 1;
+              else pUser.recentPlayers.push({ id: userId, games: 1 });
+              pUser.recentPlayers = pUser.recentPlayers.slice(-20);
+            }
+          });
+          room.players.forEach(pid => {
+            const pSocket = io.sockets.sockets.get(getUser(pid).socketId);
             if (pSocket) sendRecentPlayers(pSocket);
-          }
-        });
+          });
+        }
         break;
       }
     }
@@ -403,23 +438,23 @@ io.on('connection', (socket) => {
       }
 
       for (const [code, room] of rooms.entries()) {
-        if (room.players.includes(userId)) {
-          io.to(code).emit('player_left', {});
+        if (!room.players.includes(userId)) continue;
+        io.to(code).emit('player_left', {});
+        if (room.inGame) {
+          // داخل بازی می‌مونه تا با rejoin برگرده؛ خروج میزبان = لغو بازی
           if (room.hostId === userId) {
-            if (room.inGame) {
-              io.to(code).emit('game_aborted', {});
-              rooms.delete(code);
-              broadcastRoomList();
-            } else if (room.players.length > 1) {
-              const newHost = room.players.find(id => id !== userId);
-              room.hostId = newHost;
-              io.to(code).emit('host_changed', { hostId: newHost });
-            } else {
-              rooms.delete(code);
-              broadcastRoomList();
-            }
+            io.to(code).emit('game_aborted', {});
+            rooms.delete(code);
+            broadcastRoomList();
+          } else {
+            io.to(code).emit('players', getRoomPlayers(code));
           }
-          io.to(code).emit('players', getRoomPlayers(code));
+        } else if (!disconnectTimers.has(userId)) {
+          // لابی: ۳۰ ثانیه مهلت برگشت (قطعی‌های لحظه‌ای اخراج نکنه)، بعدش حذف واقعی
+          disconnectTimers.set(userId, setTimeout(() => {
+            disconnectTimers.delete(userId);
+            removePlayerFromLobbyRooms(userId);
+          }, 30000));
         }
       }
     }

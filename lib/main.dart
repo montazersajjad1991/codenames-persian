@@ -1369,10 +1369,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     _socket.off('host_changed');
     _socket.off('game_aborted');
     _socket.off('left_room');
-    // اگه وارد بازی نشدیم، سوکت رو کامل قطع کن
-    if (!_navigated) {
-      _socket.disconnect();
-    }
+    // وقتی لابی بسته می‌شه یعنی بازی هم بسته شده؛ سوکت همیشه قطع شه
+    _socket.disconnect();
     _joinController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -1511,7 +1509,10 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     final assignments = <Map<String, dynamic>>[];
     void add(String slot, String team, String role) {
       final id = _slots[slot];
-      if (id != null) assignments.add({'id': id, 'team': team, 'role': role});
+      if (id != null) {
+        assignments
+            .add({'id': id, 'team': team, 'role': role, 'name': _nameOf(id)});
+      }
     }
 
     add('t1s', t1, 'spymaster');
@@ -1555,7 +1556,18 @@ class _OnlineLobbyState extends State<OnlineLobby> {
           assignments: assignments,
         ),
       ),
-    );
+    ).then((_) {
+      // برگشت از بازی: وضعیت اتاق ریست بشه
+      if (!mounted) return;
+      setState(() {
+        _navigated = false;
+        _roomCode = null;
+        _isHost = false;
+        _mode = 'main';
+        _players = [];
+        _slots.updateAll((k, v) => null);
+      });
+    });
   }
 
   Widget _chip(String id, Color color) {
@@ -1846,8 +1858,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton(
-                          onPressed: () =>
-                              _joinRoom(_joinController.text.trim()),
+                          onPressed: () => _joinRoom(
+                              _joinController.text.trim().toUpperCase()),
                           style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green),
                           child: const Text('ورود',
