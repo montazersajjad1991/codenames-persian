@@ -163,9 +163,8 @@ class SoundManager {
 
   void exitGame() {
     _inGame = false;
-    if (!_isMuted && _themeStarted) {
-      _music.resume().catchError((_) {});
-    }
+    // موزیک تم رو قطع نگه می‌داریم (resume نمی‌کنیم)
+    // فقط وقتی به منوی اصلی برگردیم، resume می‌شه
   }
 
   void _afterEffect() {
