@@ -1329,11 +1329,42 @@ class _OnlineLobbyState extends State<OnlineLobby> {
             (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
       });
     });
+    _socket.on('room_restored', (data) {
+      if (!mounted) return;
+      setState(() {
+        _roomCode = '${data['code']}';
+        _isHost = data['isHost'] == true;
+        _players = (data['players'] as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        _status = '✅ به اتاق برگشتی';
+        _maxHands = (data['maxHands'] ?? 3) as int;
+      });
+      if (data['inGame'] == true &&
+          data['assignments'] != null &&
+          (data['assignments'] as List).isNotEmpty) {
+        _applySetup(
+          (data['assignments'] as List)
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+        );
+      }
+    });
+    _socket.on('player_left', (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🚪 یک بازیکن اتاق رو ترک کرد'),
+          backgroundColor: Colors.deepOrange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    });
     _socket.on('host_changed', (data) {
       if (!mounted) return;
       final bool imHost = '${data['hostId']}' == UserProfile.id;
       setState(() {
-        if (imHost) _isHost = true;
+        _isHost = imHost; // اگه میزبانیت به یکی دیگه رسیده، وضعیت درست بشه
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1382,6 +1413,10 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     _socket.off('host_changed');
     _socket.off('game_aborted');
     _socket.off('left_room');
+    _socket.off('room_restored');
+    _socket.off('player_left');
+    _socket.off('room_restored');
+    _socket.off('player_left');
     // وقتی لابی بسته می‌شه یعنی بازی هم بسته شده؛ سوکت همیشه قطع شه
     _socket.disconnect();
     _joinController.dispose();
@@ -1445,13 +1480,26 @@ class _OnlineLobbyState extends State<OnlineLobby> {
 
   void _joinRoom(String code) {
     _socket.emitWithAck('join_room', {'code': code}, ack: (res) {
-      if (res['error'] != null) {
-        setState(() => _status = res['error']);
-      } else {
-        setState(() {
-          _roomCode = res['code'];
-          _isHost = false;
-        });
+      if (res == null || res['error'] != null) {
+        if (!mounted) return;
+        setState(() => _status = res == null ? 'خطا در اتصال' : res['error']);
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _roomCode = res['code'];
+        _isHost = res['isHost'] == true;
+        _maxHands = (res['maxHands'] ?? 3) as int;
+      });
+      // 🔧 برگشت به وسط بازی در جریان
+      if (res['inGame'] == true &&
+          res['assignments'] != null &&
+          (res['assignments'] as List).isNotEmpty) {
+        _applySetup(
+          (res['assignments'] as List)
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+        );
       }
     });
   }

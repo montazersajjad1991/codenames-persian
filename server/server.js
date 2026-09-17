@@ -154,20 +154,50 @@ io.on('connection', (socket) => {
     
     socket.join(userId); // Join personal room for direct invites/messages
 
-    // 🔧 ری‌کانکت: اگه هنوز عضو اتاقی هست، دوباره به کانال اتاق بپیوند
+    const reportedRoom = data.room || null;
+
+    // 🔧 همگام‌سازی عضویت اتاق بین سرور و کلاینت (پاک‌کننده اعضای سایه)
     for (const [code, room] of rooms.entries()) {
-      if (room.players.includes(userId)) {
+      if (!room.players.includes(userId)) continue;
+
+      if (room.inGame) {
+        // داخل بازی: عضویت می‌مونه؛ اگه کلاینت ریفرش کرده، برگردونش داخل بازی
+        socket.join(code);
+        if (code !== reportedRoom) {
+          socket.emit('room_restored', {
+            code,
+            isHost: room.hostId === userId,
+            inGame: true,
+            assignments: room.assignments || [],
+            maxHands: room.maxHands || 3,
+            players: getRoomPlayers(code),
+          });
+        }
+        continue;
+      }
+
+      if (code === reportedRoom) {
+        // کلاینت خودش می‌دونه توی اتاقه → فقط کانال دوباره وصل شه
         socket.join(code);
         if (room.hostId === userId) {
           socket.emit('host_changed', { hostId: userId });
         }
         io.to(code).emit('players', getRoomPlayers(code));
+      } else {
+        // کلاینت خبر نداره توی اتاقه (ریفرش/بستن اپ) → وضعیت اتاق برگرده بهش
+        socket.join(code);
+        socket.emit('room_restored', {
+          code,
+          isHost: room.hostId === userId,
+          inGame: false,
+          players: getRoomPlayers(code),
+        });
       }
     }
 
-    // 🔧 اگه کلاینت فکر می‌کنه توی اتاقیه ولی سرور حذفش کرده (قطعی طولانی)، خبرش کن
-    if (data.room) {
-      const r = rooms.get(data.room);
+    // 🔧 اگه کلاینت فکر می‌کنه توی اتاقیه ولی سرور حذفش کرده، خبرش کن
+    if (reportedRoom) {
+      const r = rooms.get(reportedRoom);
       if (!r || !r.players.includes(userId)) {
         socket.emit('left_room', {});
       }
@@ -209,15 +239,23 @@ io.on('connection', (socket) => {
     const room = rooms.get(code);
 
     if (!room) return callback({ error: 'اتاق پیدا نشد' });
-    if (room.players.length >= 4) return callback({ error: 'اتاق پر است' });
-    if (room.inGame) return callback({ error: 'بازی در حال جریان است' });
+    const isMember = room.players.includes(userId);
+    // 🔧 عضو قبلی که برمی‌گرده مستثنیه — «اتاق پر» فقط برای تازه‌واردهاست
+    if (!isMember && room.players.length >= 4) return callback({ error: 'اتاق پر است' });
+    if (!isMember && room.inGame) return callback({ error: 'بازی در حال جریان است' });
 
-    if (!room.players.includes(userId)) {
+    if (!isMember) {
       room.players.push(userId);
     }
     
     socket.join(code);
-    callback({ code });
+    callback({
+      code,
+      isHost: room.hostId === userId,
+      inGame: room.inGame,
+      assignments: room.assignments || [],
+      maxHands: room.maxHands || 3,
+    });
     io.to(code).emit('players', getRoomPlayers(code));
     broadcastRoomList();
   });
@@ -470,12 +508,17 @@ io.on('connection', (socket) => {
           } else {
             io.to(code).emit('players', getRoomPlayers(code));
           }
-        } else if (!disconnectTimers.has(userId)) {
-          // لابی: ۳۰ ثانیه مهلت برگشت (قطعی‌های لحظه‌ای اخراج نکنه)، بعدش حذف واقعی
-          disconnectTimers.set(userId, setTimeout(() => {
-            disconnectTimers.delete(userId);
-            removePlayerFromLobbyRooms(userId);
-          }, 30000));
+        } else {
+          // 🔧 فوراً آفلاین نشون بده (نقطه خاکستری + نوتیفیکیشن)
+          io.to(code).emit('player_left', {});
+          io.to(code).emit('players', getRoomPlayers(code));
+          if (!disconnectTimers.has(userId)) {
+            // ۳۰ ثانیه مهلت برگشت؛ بعدش حذف واقعی
+            disconnectTimers.set(userId, setTimeout(() => {
+              disconnectTimers.delete(userId);
+              removePlayerFromLobbyRooms(userId);
+            }, 30000));
+          }
         }
       }
     }
