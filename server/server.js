@@ -96,7 +96,15 @@ function sendRecentPlayers(socket) {
   if (!user) return;
   const recentData = user.recentPlayers.map(rp => {
     const p = getUser(rp.id);
-    return { id: p.id, name: p.name, online: p.socketId !== null, lastSeen: p.lastSeen, games: rp.games || 1 };
+    return {
+      id: p.id,
+      name: p.name,
+      online: p.socketId !== null,
+      lastSeen: p.lastSeen,
+      games: rp.games || 1,
+      isFriend: user.friends.includes(p.id),
+      pendingSent: p.pendingRequests.includes(user.id)
+    };
   });
   socket.emit('recent_players', recentData);
 }
@@ -213,7 +221,8 @@ io.on('connection', (socket) => {
     const results = [];
     for (const [id, user] of users.entries()) {
       if (id === socket.userId) continue;
-      if (user.name.toLowerCase().includes(query.toLowerCase()) || id.includes(query)) {
+      const q = query.toLowerCase();
+      if (user.name.toLowerCase().includes(q) || id.toLowerCase().includes(q)) {
         const currentUser = getUser(socket.userId);
         const isFriend = currentUser.friends.includes(id);
         const pendingSent = user.pendingRequests.includes(socket.userId);
@@ -229,7 +238,12 @@ io.on('connection', (socket) => {
     const user = getUser(socket.userId);
     const friend = getUser(friendId);
 
-    if (!user.friends.includes(friendId) && !friend.pendingRequests.includes(socket.userId)) {
+    if (friendId === socket.userId) return;
+    if (user.friends.includes(friendId)) {
+      socket.emit('request_result', { ok: false, name: friend.name, reason: 'already' });
+      return;
+    }
+    if (!friend.pendingRequests.includes(socket.userId)) {
       friend.pendingRequests.push(socket.userId);
       const friendSocket = io.sockets.sockets.get(friend.socketId);
       if (friendSocket) {
@@ -237,6 +251,9 @@ io.on('connection', (socket) => {
         sendFriendsList(friendSocket);
       }
     }
+    // ✅ همیشه به فرستنده خبر بده (حتی اگه گیرنده آفلاین باشه)
+    socket.emit('request_result', { ok: true, name: friend.name });
+    sendRecentPlayers(socket);
   });
 
   socket.on('remove_friend', (data) => {
@@ -266,6 +283,13 @@ io.on('connection', (socket) => {
         sendFriendsList(friendSocket);
       }
     }
+    
+    // 🔄 لیست‌های فرستنده‌ی درخواست هم آپدیت بشه (پاک شدن «در انتظار» یا تبدیل به دوست)
+    const fromSocket = io.sockets.sockets.get(friend.socketId);
+    if (fromSocket) {
+      sendRecentPlayers(fromSocket);
+      sendFriendsList(fromSocket);
+    }
   });
 
   socket.on('invite_friend', (data) => {
@@ -289,6 +313,18 @@ io.on('connection', (socket) => {
         room.assignments = data.assignments;
         room.maxHands = data.maxHands || 3;
         room.inGame = true;
+        // ➕ همه اعضای اتاق از لحظه شروع بازی در لیست «بازیکنان اخیر» هم ثبت می‌شن
+        room.players.forEach(pid => {
+          const pUser = getUser(pid);
+          room.players.forEach(otherId => {
+            if (otherId !== pid && !pUser.recentPlayers.some(rp => rp.id === otherId)) {
+              pUser.recentPlayers.push({ id: otherId, games: 1 });
+            }
+          });
+          pUser.recentPlayers = pUser.recentPlayers.slice(-20);
+          const pSocket = io.sockets.sockets.get(pUser.socketId);
+          if (pSocket) sendRecentPlayers(pSocket);
+        });
         io.to(room.code).emit('setup', { assignments: room.assignments, maxHands: room.maxHands });
         break;
       }

@@ -1362,6 +1362,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     _socket.off('pending_requests');
     _socket.off('friend_request');
     _socket.off('friend_accepted');
+    _socket.off('request_result');
     _socket.off('room_invite');
     _socket.off('recent_players');
     _socket.off('room_list');
@@ -1649,6 +1650,23 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                           : formatLastSeen(lastSeen)),
                   style: const TextStyle(color: Colors.white54, fontSize: 10.5),
                 ),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: id));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('📋 کد $id کپی شد'),
+                        backgroundColor: Colors.blue,
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'کد: $id (لمس = کپی)',
+                    style:
+                        const TextStyle(color: Colors.white38, fontSize: 9.5),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1667,6 +1685,15 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                   borderRadius: BorderRadius.circular(12)),
               child: const Text('در انتظار',
                   style: TextStyle(color: Colors.orange, fontSize: 10)),
+            ),
+          if (isFriend)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Text('✓ دوست',
+                  style: TextStyle(color: Colors.green, fontSize: 10)),
             ),
           if (onAdd != null && !isFriend && !pendingSent)
             IconButton(
@@ -2080,11 +2107,10 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                         lastSeen:
                             u['lastSeen'] is int ? u['lastSeen'] as int : 0,
                         games: u['games'] is int ? u['games'] as int : 0,
-                        isFriend: _isFriend('${u['id']}'),
-                        onAdd: _isFriend('${u['id']}')
-                            ? null
-                            : () => _socket
-                                .emit('add_friend', {'friendId': u['id']}),
+                        isFriend: u['isFriend'] == true,
+                        pendingSent: u['pendingSent'] == true,
+                        onAdd: () =>
+                            _socket.emit('add_friend', {'friendId': u['id']}),
                       ),
                     ),
                     const SizedBox(height: 8),
