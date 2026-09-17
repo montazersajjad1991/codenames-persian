@@ -985,6 +985,7 @@ class TutorialPage extends StatelessWidget {
         backgroundColor: const Color(0xFF14141F),
         appBar: AppBar(
           backgroundColor: const Color(0xFF2D1B4E),
+          iconTheme: const IconThemeData(color: Colors.white),
           title: const Text(
             'آموزش اسم رمز',
             style: TextStyle(color: Colors.white),
@@ -1161,8 +1162,11 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       if (!mounted) return;
       setState(() => _status = '✅ متصل شدی');
       // ثبت یوزر ثابت روی سرور
-      _socket.emit(
-          'register', {'userId': UserProfile.id, 'name': UserProfile.name});
+      _socket.emit('register', {
+        'userId': UserProfile.id,
+        'name': UserProfile.name,
+        'room': _roomCode, // سرور بفهمه هنوز توی اتاقیم یا نه
+      });
     });
     _socket.onConnectError(
       (_) {
@@ -1327,9 +1331,18 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     });
     _socket.on('host_changed', (data) {
       if (!mounted) return;
-      if ('${data['hostId']}' == UserProfile.id) {
-        setState(() => _isHost = true);
-      }
+      final bool imHost = '${data['hostId']}' == UserProfile.id;
+      setState(() {
+        if (imHost) _isHost = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(imHost
+              ? '👑 میزبان قبلی رفت؛ تو میزبان شدی! منتظر تکمیل اتاق بمون'
+              : '👑 میزبان عوض شد'),
+          backgroundColor: Colors.purple,
+        ),
+      );
     });
     _socket.on('game_aborted', (_) {
       if (!mounted) return;
@@ -1742,6 +1755,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
         backgroundColor: const Color(0xFF1E1E2E),
         appBar: AppBar(
           backgroundColor: const Color(0xFF2D1B4E),
+          iconTheme: const IconThemeData(color: Colors.white),
           title: const Text('بازی آنلاین ۴ نفره',
               style: TextStyle(color: Colors.white)),
         ),

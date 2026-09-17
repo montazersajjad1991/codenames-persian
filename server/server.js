@@ -153,6 +153,26 @@ io.on('connection', (socket) => {
     }
     
     socket.join(userId); // Join personal room for direct invites/messages
+
+    // 🔧 ری‌کانکت: اگه هنوز عضو اتاقی هست، دوباره به کانال اتاق بپیوند
+    for (const [code, room] of rooms.entries()) {
+      if (room.players.includes(userId)) {
+        socket.join(code);
+        if (room.hostId === userId) {
+          socket.emit('host_changed', { hostId: userId });
+        }
+        io.to(code).emit('players', getRoomPlayers(code));
+      }
+    }
+
+    // 🔧 اگه کلاینت فکر می‌کنه توی اتاقیه ولی سرور حذفش کرده (قطعی طولانی)، خبرش کن
+    if (data.room) {
+      const r = rooms.get(data.room);
+      if (!r || !r.players.includes(userId)) {
+        socket.emit('left_room', {});
+      }
+    }
+
     sendFriendsList(socket);
     sendRecentPlayers(socket);
     broadcastRoomList();
@@ -224,6 +244,7 @@ io.on('connection', (socket) => {
             const newHost = room.players[0];
             room.hostId = newHost;
             io.to(code).emit('host_changed', { hostId: newHost });
+            broadcastRoomList();
           }
         }
         
