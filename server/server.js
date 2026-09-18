@@ -20,25 +20,7 @@ const io = new Server(server, {
 // ==========================================
 const users = new Map(); // userId -> { id, name, socketId, lastSeen, friends: [], pendingRequests: [], recentPlayers: [] }
 const rooms = new Map(); // roomCode -> { code, hostId, isPublic, players: [userId], inGame: false, assignments: [], maxHands: 3, board: null, state: null }
-const disconnectTimers = new Map(); // userId -> timeout (مهلت برگشت بعد از قطعی در لابی)
-
-function removePlayerFromLobbyRooms(userId) {
-  for (const [code, room] of rooms.entries()) {
-    if (room.inGame || !room.players.includes(userId)) continue;
-    room.players = room.players.filter(id => id !== userId);
-    if (room.players.length === 0) {
-      rooms.delete(code);
-      broadcastRoomList();
-    } else {
-      if (room.hostId === userId) {
-        room.hostId = room.players[0];
-        io.to(code).emit('host_changed', { hostId: room.hostId });
-      }
-      io.to(code).emit('players', getRoomPlayers(code));
-      broadcastRoomList();
-    }
-  }
-}
+const disconnectTimers = new Map(); // userId -> timeout (مهلت برگشت بعد از قطعی)
 
 // ==========================================
 // 🛠️ HELPER FUNCTIONS
@@ -99,13 +81,13 @@ function broadcastRoomList() {
 function sendFriendsList(socket) {
   const user = users.get(socket.userId);
   if (!user) return;
-  
+
   const friendsData = user.friends.map(fid => {
     const f = getUser(fid);
     return { id: f.id, name: f.name, online: f.socketId !== null, lastSeen: f.lastSeen };
   });
   socket.emit('friends', friendsData);
-  
+
   const pendingData = user.pendingRequests.map(fid => {
     const f = getUser(fid);
     return { from: f.id, name: f.name, online: f.socketId !== null, lastSeen: f.lastSeen };
@@ -131,6 +113,36 @@ function sendRecentPlayers(socket) {
   socket.emit('recent_players', recentData);
 }
 
+// 🔧 خروج کاربر از اتاق‌ها — exceptCode یعنی این اتاق دست نخوره می‌مونه
+// قانون: هر کاربر فقط عضو «یک» اتاق؛ عضویت جدید = پاک‌سازی خودکار بقیه
+function removeUserFromRooms(socket, userId, exceptCode = null) {
+  for (const [code, room] of rooms.entries()) {
+    if (code === exceptCode || !room.players.includes(userId)) continue;
+    room.players = room.players.filter(id => id !== userId);
+    if (socket) {
+      try { socket.leave(code); } catch (_) {}
+    }
+    io.to(code).emit('player_left', {});
+    if (room.players.length === 0) {
+      rooms.delete(code);
+      broadcastRoomList();
+      continue;
+    }
+    if (room.hostId === userId) {
+      if (room.inGame) {
+        io.to(code).emit('game_aborted', {});
+        rooms.delete(code);
+        broadcastRoomList();
+        continue;
+      }
+      room.hostId = room.players[0]; // اولین نفر باقی‌مونده = اولین جوین‌شده
+      io.to(code).emit('host_changed', { hostId: room.hostId });
+    }
+    io.to(code).emit('players', getRoomPlayers(code));
+    broadcastRoomList();
+  }
+}
+
 // ==========================================
 // 🔌 SOCKET.IO CONNECTION LOGIC
 // ==========================================
@@ -151,54 +163,25 @@ io.on('connection', (socket) => {
       clearTimeout(pendingKick);
       disconnectTimers.delete(userId);
     }
-    
+
     socket.join(userId); // Join personal room for direct invites/messages
 
     const reportedRoom = data.room || null;
 
-    // 🔧 همگام‌سازی عضویت اتاق بین سرور و کلاینت (پاک‌کننده اعضای سایه)
-    for (const [code, room] of rooms.entries()) {
-      if (!room.players.includes(userId)) continue;
+    // 🔧 همگام‌سازی عضویت: فقط اتاقی که کلاینت گزارش می‌ده باقی می‌مونه
+    // (اتاق ارواح و اعضای سایه همین‌جا پاک می‌شن)
+    removeUserFromRooms(socket, userId, reportedRoom);
 
-      if (room.inGame) {
-        // داخل بازی: عضویت می‌مونه؛ اگه کلاینت ریفرش کرده، برگردونش داخل بازی
-        socket.join(code);
-        if (code !== reportedRoom) {
-          socket.emit('room_restored', {
-            code,
-            isHost: room.hostId === userId,
-            inGame: true,
-            assignments: room.assignments || [],
-            maxHands: room.maxHands || 3,
-            players: getRoomPlayers(code),
-          });
-        }
-        continue;
-      }
-
-      if (code === reportedRoom) {
-        // کلاینت خودش می‌دونه توی اتاقه → فقط کانال دوباره وصل شه
-        socket.join(code);
+    if (reportedRoom) {
+      const room = rooms.get(reportedRoom);
+      if (room && room.players.includes(userId)) {
+        socket.join(reportedRoom);
         if (room.hostId === userId) {
           socket.emit('host_changed', { hostId: userId });
         }
-        io.to(code).emit('players', getRoomPlayers(code));
+        io.to(reportedRoom).emit('players', getRoomPlayers(reportedRoom));
       } else {
-        // کلاینت خبر نداره توی اتاقه (ریفرش/بستن اپ) → وضعیت اتاق برگرده بهش
-        socket.join(code);
-        socket.emit('room_restored', {
-          code,
-          isHost: room.hostId === userId,
-          inGame: false,
-          players: getRoomPlayers(code),
-        });
-      }
-    }
-
-    // 🔧 اگه کلاینت فکر می‌کنه توی اتاقیه ولی سرور حذفش کرده، خبرش کن
-    if (reportedRoom) {
-      const r = rooms.get(reportedRoom);
-      if (!r || !r.players.includes(userId)) {
+        // سرور این اتاق رو نداره (مثلاً ری‌استارت شده)
         socket.emit('left_room', {});
       }
     }
@@ -213,6 +196,9 @@ io.on('connection', (socket) => {
     const userId = socket.userId;
     if (!userId) return callback({ error: 'ثبت نام نشده' });
 
+    // 🔧 اول از اتاق‌های قبلی خارج شو (جلوگیری از اتاق ارواح)
+    removeUserFromRooms(socket, userId);
+
     const code = generateRoomCode();
     rooms.set(code, {
       code,
@@ -225,7 +211,7 @@ io.on('connection', (socket) => {
       board: null,
       state: null
     });
-    
+
     socket.join(code);
     callback({ code });
     io.to(code).emit('players', getRoomPlayers(code));
@@ -239,15 +225,19 @@ io.on('connection', (socket) => {
     const room = rooms.get(code);
 
     if (!room) return callback({ error: 'اتاق پیدا نشد' });
+
     const isMember = room.players.includes(userId);
-    // 🔧 عضو قبلی که برمی‌گرده مستثنیه — «اتاق پر» فقط برای تازه‌واردهاست
+    // 🔧 عضو برگشتی مستثنیه — «اتاق پر» فقط برای تازه‌واردهاست
     if (!isMember && room.players.length >= 4) return callback({ error: 'اتاق پر است' });
     if (!isMember && room.inGame) return callback({ error: 'بازی در حال جریان است' });
+
+    // 🔧 اول از اتاق‌های دیگه خارج شو (جلوگیری از عضویت چندگانه)
+    removeUserFromRooms(socket, userId, code);
 
     if (!isMember) {
       room.players.push(userId);
     }
-    
+
     socket.join(code);
     callback({
       code,
@@ -264,33 +254,7 @@ io.on('connection', (socket) => {
   socket.on('leave', () => {
     const userId = socket.userId;
     if (!userId) return;
-
-    for (const [code, room] of rooms.entries()) {
-      if (room.players.includes(userId)) {
-        room.players = room.players.filter(id => id !== userId);
-        io.to(code).emit('player_left', {});
-
-        if (room.players.length === 0) {
-          rooms.delete(code);
-          broadcastRoomList();
-        } else if (room.hostId === userId) {
-          if (room.inGame) {
-            io.to(code).emit('game_aborted', {});
-            rooms.delete(code);
-            broadcastRoomList();
-          } else {
-            const newHost = room.players[0];
-            room.hostId = newHost;
-            io.to(code).emit('host_changed', { hostId: newHost });
-            broadcastRoomList();
-          }
-        }
-        
-        io.to(code).emit('players', getRoomPlayers(code));
-        socket.leave(code);
-        break;
-      }
-    }
+    removeUserFromRooms(socket, userId); // از همه‌ی اتاق‌ها خارج شو
   });
 
   // 5. لیست اتاق‌های عمومی
@@ -306,10 +270,10 @@ io.on('connection', (socket) => {
     const { query } = data;
     if (!query) return callback({ results: [] });
 
+    const q = query.toLowerCase();
     const results = [];
     for (const [id, user] of users.entries()) {
       if (id === socket.userId) continue;
-      const q = query.toLowerCase();
       if (user.name.toLowerCase().includes(q) || id.toLowerCase().includes(q)) {
         const currentUser = getUser(socket.userId);
         const isFriend = currentUser.friends.includes(id);
@@ -366,14 +330,14 @@ io.on('connection', (socket) => {
       if (!friend.friends.includes(socket.userId)) friend.friends.push(socket.userId);
       // درخواست متقابل همزمان هم پاک بشه
       friend.pendingRequests = friend.pendingRequests.filter(id => id !== socket.userId);
-      
+
       const friendSocket = io.sockets.sockets.get(friend.socketId);
       if (friendSocket) {
         friendSocket.emit('friend_accepted', { name: user.name });
         sendFriendsList(friendSocket);
       }
     }
-    
+
     // 🔄 لیست‌های فرستنده‌ی درخواست هم آپدیت بشه (پاک شدن «در انتظار» یا تبدیل به دوست)
     const fromSocket = io.sockets.sockets.get(friend.socketId);
     if (fromSocket) {
@@ -403,7 +367,7 @@ io.on('connection', (socket) => {
         room.assignments = data.assignments;
         room.maxHands = data.maxHands || 3;
         room.inGame = true;
-        // ➕ همه اعضای اتاق از لحظه شروع بازی در لیست «بازیکنان اخیر» هم ثبت می‌شن
+        // ➕ همه اعضای اتاق از لحظه شروع بازی در لیست «بازیکنان اخیر» ثبت می‌شن
         room.players.forEach(pid => {
           const pUser = getUser(pid);
           room.players.forEach(otherId => {
@@ -500,23 +464,29 @@ io.on('connection', (socket) => {
         if (!room.players.includes(userId)) continue;
         io.to(code).emit('player_left', {});
         if (room.inGame) {
-          // داخل بازی می‌مونه تا با rejoin برگرده؛ خروج میزبان = لغو بازی
           if (room.hostId === userId) {
+            // خروج میزبان وسط بازی = لغو بازی
             io.to(code).emit('game_aborted', {});
             rooms.delete(code);
             broadcastRoomList();
           } else {
+            // بقیه فوراً ببینن که این بازیکن آفلاین شده
             io.to(code).emit('players', getRoomPlayers(code));
+            if (!disconnectTimers.has(userId)) {
+              // داخل بازی ۲ دقیقه مهلت rejoin، بعدش حذف واقعی
+              disconnectTimers.set(userId, setTimeout(() => {
+                disconnectTimers.delete(userId);
+                removeUserFromRooms(null, userId);
+              }, 120000));
+            }
           }
         } else {
-          // 🔧 فوراً آفلاین نشون بده (نقطه خاکستری + نوتیفیکیشن)
-          io.to(code).emit('player_left', {});
+          // لابی: فوراً آفلاین نشون بده، ۳۰ ثانیه بعد حذف واقعی
           io.to(code).emit('players', getRoomPlayers(code));
           if (!disconnectTimers.has(userId)) {
-            // ۳۰ ثانیه مهلت برگشت؛ بعدش حذف واقعی
             disconnectTimers.set(userId, setTimeout(() => {
               disconnectTimers.delete(userId);
-              removePlayerFromLobbyRooms(userId);
+              removeUserFromRooms(null, userId);
             }, 30000));
           }
         }

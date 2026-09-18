@@ -1162,10 +1162,10 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       if (!mounted) return;
       setState(() => _status = '✅ متصل شدی');
       // ثبت یوزر ثابت روی سرور
-      _socket.emit('register', {
+            _socket.emit('register', {
         'userId': UserProfile.id,
         'name': UserProfile.name,
-        'room': _roomCode, // سرور بفهمه هنوز توی اتاقیم یا نه
+        'room': _roomCode,
       });
     });
     _socket.onConnectError(
