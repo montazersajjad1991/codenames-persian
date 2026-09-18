@@ -1134,6 +1134,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
   String? _roomCode;
   bool _isHost = false;
   bool _navigated = false;
+  bool _returningToRoom = false; // وقتی وسط بازی یه نفر رفت و به اتاق انتظار برمی‌گردیم
   String _status = 'در حال اتصال...';
   final TextEditingController _joinController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
@@ -1386,9 +1387,22 @@ class _OnlineLobbyState extends State<OnlineLobby> {
         _isHost = false;
         _mode = 'main';
         _navigated = false;
+        _returningToRoom = false;
         _players = [];
         _slots.updateAll((k, v) => null);
       });
+    });
+    _socket.on('back_to_lobby', (data) {
+      // فقط فلگ ست می‌شه؛ بستن صفحه‌ی بازی کار GameBoardه
+      _returningToRoom = true;
+      if (!mounted) return;
+      final String who = '${data['leaverName'] ?? 'یک بازیکن'}';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🚪 $who رفت؛ برگشتید به اتاق انتظار'),
+          backgroundColor: Colors.deepOrange,
+        ),
+      );
     });
   }
 
@@ -1413,6 +1427,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
     _socket.off('host_changed');
     _socket.off('game_aborted');
     _socket.off('left_room');
+    _socket.off('back_to_lobby');
     _socket.off('room_restored');
     _socket.off('player_left');
     _socket.off('room_restored');
@@ -1602,6 +1617,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       }
     }
     _navigated = true;
+    _returningToRoom = false; // فلگ قدیمی پاک شه
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1618,8 +1634,17 @@ class _OnlineLobbyState extends State<OnlineLobby> {
         ),
       ),
     ).then((_) {
-      // برگشت از بازی: وضعیت اتاق ریست بشه
       if (!mounted) return;
+      if (_returningToRoom) {
+        // 🔙 یه بازیکن وسط بازی رفت؛ تو اتاق می‌مونیم و منتظر تکمیل نفرات
+        setState(() {
+          _navigated = false;
+          _slots.updateAll((k, v) => null);
+          _returningToRoom = false;
+        });
+        return;
+      }
+      // برگشت عادی از بازی: وضعیت اتاق ریست بشه
       setState(() {
         _navigated = false;
         _roomCode = null;
@@ -2702,6 +2727,15 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
           if (mounted) Navigator.pop(context);
         });
       });
+      widget.socket!.on('back_to_lobby', (data) {
+        // یه بازیکن رفت؛ همه برمی‌گردیم به اتاق انتظار
+        if (!mounted) return;
+        _aborted = true; // موقع بستن صفحه leave نفرست — هنوز تو اتاقیم
+        _showNotification('🔙 بازگشت به اتاق انتظار؛ منتظر تکمیل نفرات...');
+        Future.delayed(const Duration(milliseconds: 2200), () {
+          if (mounted) Navigator.pop(context);
+        });
+      });
       // همگام‌سازی اولیه + تکرار خودکار تا آماده شدن
       widget.socket!.emit('resync', {'room': widget.roomCode});
       if (!widget.isHost) {
@@ -2741,6 +2775,10 @@ class _GameBoardState extends State<GameBoard> with TickerProviderStateMixin {
   void dispose() {
     _tickTimer?.cancel();
     _resyncTimer?.cancel();
+    if (widget.online) {
+      widget.socket!.off('board', _onBoard);
+      widget.socket!.off('state', _onState);
+    }
     _shakeController.dispose();
     _pulseController.dispose();
     _turnBannerPulseController.dispose();
