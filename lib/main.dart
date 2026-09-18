@@ -1134,7 +1134,8 @@ class _OnlineLobbyState extends State<OnlineLobby> {
   String? _roomCode;
   bool _isHost = false;
   bool _navigated = false;
-  bool _returningToRoom = false; // وقتی وسط بازی یه نفر رفت و به اتاق انتظار برمی‌گردیم
+  bool _returningToRoom =
+      false; // وقتی وسط بازی یه نفر رفت و به اتاق انتظار برمی‌گردیم
   String _status = 'در حال اتصال...';
   final TextEditingController _joinController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
@@ -1163,7 +1164,7 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       if (!mounted) return;
       setState(() => _status = '✅ متصل شدی');
       // ثبت یوزر ثابت روی سرور
-            _socket.emit('register', {
+      _socket.emit('register', {
         'userId': UserProfile.id,
         'name': UserProfile.name,
         'room': _roomCode,
@@ -1205,55 +1206,16 @@ class _OnlineLobbyState extends State<OnlineLobby> {
       });
     });
     _socket.on('friend_request', (data) {
-      // popup درخواست دوستی
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => Directionality(
-            textDirection: TextDirection.rtl,
-            child: AlertDialog(
-              backgroundColor: const Color(0xFF252538),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: [
-                  const Icon(Icons.person_add, color: Color(0xFFE8B33C)),
-                  const SizedBox(width: 8),
-                  const Text('درخواست دوستی',
-                      style: TextStyle(color: Colors.white)),
-                ],
-              ),
-              content: Text(
-                '${data['name']} می‌خواد دوست تو بشه',
-                style: const TextStyle(color: Colors.white70, fontSize: 15),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _socket.emit('respond_friend', {
-                      'from': data['from'],
-                      'accept': false,
-                    });
-                  },
-                  child: const Text('رد', style: TextStyle(color: Colors.red)),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _socket.emit('respond_friend', {
-                      'from': data['from'],
-                      'accept': true,
-                    });
-                  },
-                  child: const Text('تایید',
-                      style: TextStyle(color: Colors.green)),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
+      // بدون پاپ‌آپ: فقط یه اطلاع‌رسانی کوچیک؛ تصمیم با صفحه‌ی دوستان
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '📨 ${data['name']} به تو درخواست دوستی داد — از صفحه‌ی دوستان تایید کن'),
+          backgroundColor: const Color(0xFF2D1B4E),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     });
     _socket.on('friend_accepted', (data) {
       if (mounted) {
@@ -2247,6 +2209,22 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                   const SizedBox(height: 16),
                   Text('بازیکن‌ها (${_players.length}/4):',
                       style: const TextStyle(color: Colors.white70)),
+                  const SizedBox(height: 4),
+                  TextButton.icon(
+                    onPressed: _showInviteDialog,
+                    icon: const Icon(Icons.mail_outline,
+                        color: Color(0xFFE8B33C), size: 18),
+                    label: const Text('دعوت دوستان',
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _showInviteDialog,
+                    icon: const Icon(Icons.mail_outline,
+                        color: Color(0xFFE8B33C), size: 18),
+                    label: const Text('دعوت دوستان',
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                       spacing: 8,
@@ -2328,6 +2306,180 @@ class _OnlineLobbyState extends State<OnlineLobby> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showInviteDialog() {
+    if (_friends.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('هنوز دوستی نداری — از صفحه‌ی دوستان اضافه کن'),
+          backgroundColor: Colors.deepOrange,
+        ),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF252538),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('✉️ دعوت دوستان به اتاق',
+              style: TextStyle(
+                  color: Color(0xFFE8B33C),
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 280,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _friends.map((f) {
+                final online = f['online'] == true;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 5,
+                        backgroundColor: online ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('${f['name']}',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 13)),
+                      ),
+                      TextButton(
+                        onPressed: online
+                            ? () {
+                                Navigator.pop(ctx);
+                                _socket.emit(
+                                    'invite_friend', {'friendId': f['id']});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        '📨 دعوت برای ${f['name']} ارسال شد'),
+                                    backgroundColor: Colors.blue,
+                                  ),
+                                );
+                              }
+                            : null,
+                        child: Text(online ? 'دعوت' : 'آفلاین',
+                            style: TextStyle(
+                                color: online ? Colors.green : Colors.white24,
+                                fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child:
+                  const Text('بستن', style: TextStyle(color: Colors.white60)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInviteDialog() {
+    if (_friends.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('هنوز دوستی نداری — از صفحه‌ی دوستان اضافه کن'),
+          backgroundColor: Colors.deepOrange,
+        ),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF252538),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('✉️ دعوت دوستان به اتاق',
+              style: TextStyle(
+                  color: Color(0xFFE8B33C),
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 280,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _friends.map((f) {
+                final online = f['online'] == true;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 5,
+                        backgroundColor: online ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('${f['name']}',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 13)),
+                      ),
+                      TextButton(
+                        onPressed: online
+                            ? () {
+                                Navigator.pop(ctx);
+                                _socket.emit(
+                                    'invite_friend', {'friendId': f['id']});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        '📨 دعوت برای ${f['name']} ارسال شد'),
+                                    backgroundColor: Colors.blue,
+                                  ),
+                                );
+                              }
+                            : null,
+                        child: Text(online ? 'دعوت' : 'آفلاین',
+                            style: TextStyle(
+                                color: online ? Colors.green : Colors.white24,
+                                fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child:
+                  const Text('بستن', style: TextStyle(color: Colors.white60)),
+            ),
+          ],
         ),
       ),
     );
