@@ -1940,40 +1940,70 @@ class _OnlineLobbyState extends State<OnlineLobby> {
                       const Text('فعلاً اتاق عمومی‌ای ساخته نشده 😕',
                           style: TextStyle(color: Colors.white54)),
                     ..._publicRooms.map(
-                      (r) => Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(10)),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('${r['roomName']}',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold)),
-                                  Text(
-                                      '${r['inGame'] == true ? '🎮 بازی در جریان | ' : ''}👥 ${r['players']}/4 | کد: ${r['code']}',
-                                      style: const TextStyle(
-                                          color: Colors.white60, fontSize: 12)),
-                                ],
+                      (r) {
+                        // 🔍 دوستایی که این اتاق نشستن
+                        final List<dynamic> plist =
+                            (r['playerList'] as List?) ?? const [];
+                        final friendNames = <String>[];
+                        for (final p in plist) {
+                          final pid = '${p['id']}';
+                          if (_friends.any((f) => '${f['id']}' == pid)) {
+                            friendNames.add('${p['name']}');
+                          }
+                        }
+                        final hasFriend = friendNames.isNotEmpty;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                              color: hasFriend
+                                  ? Colors.green.withOpacity(0.12)
+                                  : Colors.white10,
+                              borderRadius: BorderRadius.circular(10),
+                              border: hasFriend
+                                  ? Border.all(
+                                      color: Colors.green.withOpacity(0.5))
+                                  : null),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${r['roomName']}',
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold)),
+                                    Text(
+                                        '${r['inGame'] == true ? '🎮 بازی در جریان | ' : ''}👥 ${r['players']}/4 | کد: ${r['code']}',
+                                        style: const TextStyle(
+                                            color: Colors.white60,
+                                            fontSize: 12)),
+                                    if (hasFriend)
+                                      Text(
+                                        '❤️ دوستات اینجان: ${friendNames.join('، ')}',
+                                        style: const TextStyle(
+                                            color: Colors.greenAccent,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            ElevatedButton(
-                              onPressed: () => _joinRoom('${r['code']}'),
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green),
-                              child: const Text('ورود',
-                                  style: TextStyle(color: Colors.white)),
-                            ),
-                          ],
-                        ),
-                      ),
+                              ElevatedButton(
+                                onPressed: () => _joinRoom('${r['code']}'),
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        hasFriend ? Colors.teal : Colors.green),
+                                child: Text(hasFriend ? 'ورود ❤️' : 'ورود',
+                                    style:
+                                        const TextStyle(color: Colors.white)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     Row(

@@ -292,7 +292,16 @@ io.on('connection', (socket) => {
   socket.on('list_rooms', (data, callback) => {
     const publicRooms = Array.from(rooms.values())
       .filter(r => r.isPublic)
-      .map(r => ({ code: r.code, roomName: `اتاق ${r.code}`, players: r.players.length, inGame: r.inGame }));
+      .map(r => ({
+        code: r.code,
+        roomName: `اتاق ${r.code}`,
+        players: r.players.length,
+        inGame: r.inGame,
+        playerList: r.players.map(id => {
+          const u = getUser(id);
+          return { id: u.id, name: u.name };
+        })
+      }));
     callback({ rooms: publicRooms });
   });
 
